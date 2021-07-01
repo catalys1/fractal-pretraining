@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - override /callback: fractal
+
+trainer:
+  max_epochs: 90
+  limit_val_batches: 0
+
+data:
+  num_workers: 4
+  num_class: 1000
+  per_class: 1000
+
+model:
+  final_div_factor: 1e3
+  warmup: 0.0
