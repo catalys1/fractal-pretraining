@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
-from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics import Accuracy
 
 
 class ClassificationModel(LightningModule):
@@ -42,7 +42,9 @@ class ClassificationModel(LightningModule):
 
         self.model = model
         self.loss_fn = loss_fn if loss_fn is not None else torch.nn.CrossEntropyLoss()
+        self.setup_metrics()
 
+    def setup_metrics(self):
         self.train_accuracy = Accuracy()
         self.val_accuracy = Accuracy()
         self.metric_hist = {
