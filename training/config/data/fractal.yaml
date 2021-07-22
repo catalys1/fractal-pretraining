@@ -7,7 +7,7 @@ batch_size: 32
 num_workers: 4
 pin_memory: True
 size: 224
-data_file: ifs_constrained-search-15k.pkl
+data_file: ifs-100k.pkl
 num_class: 1000
 per_class: 1000
 generator: null

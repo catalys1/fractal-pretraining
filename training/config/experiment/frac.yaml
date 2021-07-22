@@ -10,6 +10,23 @@ data:
   num_workers: 4
   num_class: 1000
   per_class: 1000
+  generator:
+    _target_: datamodule.datasets.fractaldata.IFSGenerator
+    size: ${data.size}
+    jitter_params: fractaldb-4
+    flips: True
+    scale:
+      - 0.5
+      - 2.0
+    translate: 0.2
+    sigma: 
+      - 0.5
+      - 1.0
+    blur_p: 0.5
+    color: True
+    background: True
+    niter: 100000
+    patch: True
 
 model:
   final_div_factor: 1e3

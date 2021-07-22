@@ -1,0 +1,27 @@
+_target_: datamodule.fractal_datamodule.MultiLabelFractalDataModule
+
+_name: multifractal
+
+data_dir: ../${data_dir}  # data_dir is specified in train_config.yaml
+batch_size: 32
+num_workers: 4
+pin_memory: True
+size: 224
+data_file: ifs_constrained-search-15k.pkl
+num_class: 1000
+dataset_size: 1000000
+normalize: center
+period: 2
+generator:
+  _target_: datamodule.datasets.generator.MultiGenerator
+  size: ${data.size}
+  cache_size: 512
+  n_objects:
+    -1
+    -5
+  size_range:
+    -0.15
+    -0.6
+  jitter_params: fractaldb-4
+  niter: 100000
+  patch: True

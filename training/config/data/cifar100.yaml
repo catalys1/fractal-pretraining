@@ -4,7 +4,7 @@ _name: cifar100
 
 data_dir: ${data_dir}/cifar100/
 num_class: 100
-batch_size: 64
+batch_size: 32
 num_workers: 4
 pin_memory: True
 size: 224

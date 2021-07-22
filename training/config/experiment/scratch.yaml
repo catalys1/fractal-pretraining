@@ -8,8 +8,11 @@ data_dir: ${oc.env:DATASETS}/
 
 seed: 1
 
+model:
+  lr: 0.15
+
 trainer:
-  max_epochs: 90
+  max_epochs: 150
 
 callback:
   model_checkpoint:

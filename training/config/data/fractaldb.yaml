@@ -3,7 +3,7 @@ defaults:
 
 data_file: ifs_unconstrained-search-25k.pkl
 generator:
-  _target_: datamodule.datasets.fractaldata.IFSGenerator
+  _target_: datamodule.datasets.generator.IFSGenerator
   size: ${data.size}
   scale: False
   translate: False
