@@ -107,8 +107,8 @@ class _GeneratorBase(object):
     def generate(self, sys):
         raise NotImplementedError()
 
-    def __call__(self, ws, *args, **kwargs):
-        return self.generate(ws, *args, **kwargs)
+    def __call__(self, sys, *args, **kwargs):
+        return self.generate(sys, *args, **kwargs)
 
 
 class IFSGenerator(_GeneratorBase):

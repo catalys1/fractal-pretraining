@@ -16,14 +16,18 @@ class FractalClassDataset(object):
     def __init__(
         self,
         param_file: str,
+        num_systems: int = 1000,
         num_class: int = 1000,
         per_class: int = 100,
         generator: Optional[Callable] = None,
         queue_size: int = 0,
     ):
-        self.params = pickle.load(open(param_file, 'rb'))['params'][:num_class]
+        self.num_systems = num_systems
         self.num_class = num_class
         self.per_class = per_class
+        self.params = pickle.load(open(param_file, 'rb'))['params'][:num_systems]
+
+        # TODO: logic for creating classes from multiple systems (might want to decouple it)
 
         self.generator = generator or IFSGenerator()
 
@@ -40,7 +44,7 @@ class FractalClassDataset(object):
 
     def render_img(self, idx):
         label = idx % self.num_class
-        params = self.params[label]['ws']
+        params = self.params[label]['system']
         img = self.generator(params)
         return img
 
@@ -84,7 +88,7 @@ class MultiFractalDataset(object):
         self.generator = generator or MultiGenerator()
         # start with an image in the cache
         k = np.random.default_rng().integers(0, num_class)
-        self.generator.add_sample(self.params[k]['ws'], label=k)
+        self.generator.add_sample(self.params[k]['system'], label=k)
 
         self.steps = 0
         self.period = period
@@ -96,7 +100,7 @@ class MultiFractalDataset(object):
         self.steps = (self.steps + 1) % self.period
         sample = self.steps == 0
         label = idx % self.num_class
-        params = self.params[label]['ws']
+        params = self.params[label]['system']
         img, labels = self.generator(params, label=label, new_sample=sample)
         img = torch.from_numpy(img).float().mul_(1/255.).permute(2,0,1)
 
