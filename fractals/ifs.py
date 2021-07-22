@@ -5,7 +5,47 @@ import numba
 import numpy as np
 
 
-def get_ws(n=None, constrain=True, bval=1, rng=None, beta=30):
+def sample_svs(n, a, rng=None):
+    '''Sample singular values. 2*`n` singular values are sampled such that the following conditions
+    are satisfied, for singular values sv_{i} and i = 0, ..., 2n-1:
+    
+    1. 0 <= sv_{i} <= 1
+    2. sv_{2i} >= sv_{2i+1}
+    3. w.T @ S = `a`, for S = [sv_{0}, ..., sv_{2n-1}] and w = [1, 2, ..., 1, 2]
+    
+    Args:
+        n (int): number of pairs of singular values to sample.
+        a (float): constraint on the weighted sum of all singular values. Note that a must be in the
+            range (0, 3*n).
+        rng (Optional[numpy.random._generator.Generator]): random number generator. If None (default), it defaults
+            to np.random.default_rng().
+            
+    Returns:
+        Numpy array of shape (n, 2) containing the singular values.
+    '''
+    if rng is None:
+        rng = np.random.default_rng()
+    s = np.empty((n, 2))
+    p = a
+    q = a - 3*n + 3
+    # sample the first 2*(n-1) singular values (first n-1 pairs)
+    for i in range(n - 1):
+        s1 = rng.uniform(max(0, q/3), min(1, p))
+        q -= s1
+        p -= s1
+        s2 = rng.uniform(max(0, q/2), min(s1, p/2))
+        q = q - 2 * s2 + 3
+        p -= 2 * s2
+        s[i, :] = s1, s2
+    # sample the last pair of singular values
+    s2 = rng.uniform(max(0, (p-1)/2), p/3)
+    s1 = p - 2*s2
+    s[-1, :] = s1, s2
+    
+    return s
+
+
+def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
     '''Return n random affine transforms. If constrain=True, enforce the transforms
     to be strictly contractive (by forcing singular values to be less than 1).
     
@@ -20,9 +60,8 @@ def get_ws(n=None, constrain=True, bval=1, rng=None, beta=30):
             to 1 when constrain is False. Default: 1.
         rng (Optional[numpy.random._generator.Generator]): random number generator. If None (default), it defaults
             to np.random.default_rng().
-        beta (Union[int,float]): parameter for sampling singular values. If constrain is True, then transforms are
-            sampled via singular values and singular vectors. The first singular value of each transfrom is drawn
-            from a Beta distribution with parameters (beta, 1.1). Default: 30.
+        beta (Union[int,float]): range for weighted sum of singular values when constrain==True. Let 
+            q ~ U(beta[0], beta[1]), then we enforce $\sum_{i=0}^{n-1} (s^i_1 + 2*s^i_2) = q$.
     
     Returns:
         Numpy array of shape (n, 2, 3), containing n sets of 2x3 affine transformation matrices.
@@ -35,6 +74,10 @@ def get_ws(n=None, constrain=True, bval=1, rng=None, beta=30):
         n = rng.integers(n.start, n.stop)
     elif isinstance(n, (tuple, list)):
         n = rng.integers(*n)
+        
+    if beta is None:
+        beta = ((5 + n) / 2, (5 + n) / 2 + 0.5)
+        
     if constrain:
         # sample a matrix with singular values < 1 (a contraction)
         # 1. sample the singular vectors--random orthonormal matrices--by randomly rotating the standard basis
@@ -50,9 +93,8 @@ def get_ws(n=None, constrain=True, bval=1, rng=None, beta=30):
         uv = rmat @ base
         u, v = uv[:n], uv[n:]
         # 2. sample the singular values: smax ~ Beta(beta, 1.1), smin ~ Uniform(min(0.01, smax), smax)
-        s = np.empty((n, 2))
-        s[:, 0] = rng.beta(beta, 1.1, len(s))
-        s[:, 1] = rng.uniform(np.minimum(0.01, s[:, 0]), s[:, 0], len(s))
+        a = rng.uniform(*beta)
+        s = sample_svs(n, a, rng)
         # 3. sample the translation parameters from Uniform(-bval, bval) and create the transformation matrix
         m = np.empty((n, 2, 3))
         m[:, :, :2] = u * s[:, None, :] @ v
@@ -64,13 +106,13 @@ def get_ws(n=None, constrain=True, bval=1, rng=None, beta=30):
 
 
 @numba.njit(cache=True)
-def iterate(ws, n_iter, ps=None):
-    '''Compute points in the fractal defined by the system `ws` by random iteration. `n_iter` iterations
+def iterate(sys, n_iter, ps=None):
+    '''Compute points in the fractal defined by the system `sys` by random iteration. `n_iter` iterations
     are performed, and a transform is sampled at each iteration according to the probabilites defined by
     `ps`.
     
     Args:
-        ws (np.ndarray): array of shape (n, 2, 3), containing the affine transform parameters.
+        sys (np.ndarray): array of shape (n, 2, 3), containing the affine transform parameters.
         n_iter (int): number of iterations/points to calculate.
         ps (Optional[array-like]): length-n array of probabilites. If None (default), the probabilites are
             calculated to be proportional to the determinants of the affine transformation matrices.
@@ -78,7 +120,7 @@ def iterate(ws, n_iter, ps=None):
     Returns:
         ndarray of shape (n_iter, 2) containing the (x, y) coordinates of the generated points.
     '''
-    det = ws[:, 0, 0] * ws[:, 1, 1] - ws[:, 0, 1] * ws[:, 1, 0]
+    det = sys[:, 0, 0] * sys[:, 1, 1] - sys[:, 0, 1] * sys[:, 1, 0]
     if ps is None:
         ps = np.abs(det)
         ps = ps / ps.sum()
@@ -86,16 +128,16 @@ def iterate(ws, n_iter, ps=None):
     coords = np.empty((n_iter, 2))
 
     # starting point is $v = (I-A_1)^(-1) b$ since this point is gaurenteed to be in the set
-    # (assuming that A_1 is contractive) (A_1 = ws[0])
-    s = 1 / (1 + det[0] - ws[0, 0, 0] - ws[0, 1, 1])
-    x = s * ((1 - ws[0, 1, 1]) * ws[0, 0, 2] + ws[0, 0, 1] * ws[0, 1, 2])
-    y = s * ((1 - ws[0, 0, 0]) * ws[0, 1, 2] + ws[0, 1, 0] * ws[0, 0, 2])
+    # (assuming that A_1 is contractive) (A_1 = sys[0])
+    s = 1 / (1 + det[0] - sys[0, 0, 0] - sys[0, 1, 1])
+    x = s * ((1 - sys[0, 1, 1]) * sys[0, 0, 2] + sys[0, 0, 1] * sys[0, 1, 2])
+    y = s * ((1 - sys[0, 0, 0]) * sys[0, 1, 2] + sys[0, 1, 0] * sys[0, 0, 2])
 
     for i in range(n_iter):
         r = np.random.rand()
         for k in range(len(ps)):
             if r < ps[k]: break
-        a, b, e, c, d, f = ws[k].ravel()
+        a, b, e, c, d, f = sys[k].ravel()
         xt = x
         x = a * xt + b * y + e
         y = c * xt + d * y + f
@@ -265,6 +307,39 @@ def render(coords, s=256, binary=True, region=None, patch=False):
             return _render_graded(coords, s, region)
 
 
+@numba.njit(cache=True)
+def _hsv_colorize(rendered, min_sat=0.3, min_val=0.5):
+    '''Creates a 3-channel HSV image from a 1-channel gray image.
+    '''
+    h, w = rendered.shape[:2]
+    img = np.empty((h, w, 3), dtype=np.uint8)
+
+    hue_shift = np.random.rand() * 255
+    sat = np.uint8(np.random.uniform(min_sat, 1) * 255)
+    val = np.uint8(np.random.uniform(min_val, 1) * 255)
+
+    for i in range(h):
+        for j in range(w):
+            x = rendered[i, j]
+            if x > 0:
+                img[i, j, 0] = np.uint8(x * 255 + hue_shift)  # implicit MOD(256)
+                img[i, j, 1] = sat
+                img[i, j, 2] = val
+            else:
+                img[i, j, 0] = 0
+                img[i, j, 1] = 0
+                img[i, j, 2] = 0
+    return img
+
+@numba.njit(cache=True)
+def composite(fg, bg):
+    '''Copy nonzero pixels from fg into bg. Modifies bg in-place.'''
+    for i in range(fg.shape[0]):
+        for j in range(fg.shape[1]):
+            if fg[i, j, 0] != 0 or fg[i, j, 1] != 0 or fg[i, j, 2] != 0:
+                bg[i, j] = fg[i, j]
+    return bg
+
 def colorize(rendered, min_sat=0.3, min_val=0.5):
     '''Turns a grayscale image into a color image, where the colors are randomly chosen as explained below.
     
@@ -282,14 +357,7 @@ def colorize(rendered, min_sat=0.3, min_val=0.5):
     Returns:
         A color image as an ndarray of shape (w, h, 3).
     '''
-    idx = rendered > 0
-    vals = rendered[idx] * 255
-    rng = np.random.default_rng()
-
-    img = np.zeros((*rendered.shape, 3), dtype=np.uint8)
-    img[idx, 0] = vals + rng.integers(0, 256)  # there's an implicit MOD(256) here in the conversion to uint8
-    img[idx, 1] = rng.uniform(min_sat, 1) * 255
-    img[idx, 2] = rng.uniform(min_val, 1) * 255
+    img = _hsv_colorize(rendered, min_sat, min_val)
     cvtColor(img, COLOR_HSV2RGB, dst=img)
     return img
 
@@ -315,10 +383,10 @@ def render_gray(coords, brightness=.8):
 
 def evaluate_system(*args, **kwargs):
     '''Randomly samples a system of affine transformations and evaluates the fractal it generates. The fractal
-    if evaluated in terms of its "density" within the image, or how many of the pixels are nonzero. If the
+    is evaluated in terms of its "density" within the image, or how many of the pixels are nonzero. If the
     system is constrained to be contractive, then all values will remain finite. If the system is not thus
     constrained, sometimes the values will tend toward infinity. This function accepts several keyword arguments,
-    listed below, which are mostly passed on to get_ws.
+    listed below, which are mostly passed on to sample_system.
     
     Args:
         max_n (int): the maximum number of transforms, n, to sample in a system. n is chosen uniformly from
@@ -329,7 +397,7 @@ def evaluate_system(*args, **kwargs):
         
     Returns:
         A dictionary with two items:
-            "ws": the system parameters as an array of shape (n, 2, 3)
+            "system": the system parameters as an array of shape (n, 2, 3)
             "density": a positive value denoting the proportion of nonzero pixels in an image rendered using
                 the iterated system with 50,000 iterations, assuming the everything worked correctly. A value
                 of -1 indicates that the system produced infitely large values. A value of -2 indicates an
@@ -338,17 +406,18 @@ def evaluate_system(*args, **kwargs):
     max_n = kwargs.get('max_n', 4) + 1
     constrain = bool(kwargs.get('constrain', True))
     bval = kwargs.get('bval', 1)
-    beta = kwargs.get('beta', 30)
+    beta = kwargs.get('beta', None)
+    if beta is not None: beta = (beta, beta+0.5)
     rng = np.random.default_rng(seed=args[0])
-    ws = get_ws((2, max_n), constrain=constrain, bval=bval, rng=rng, beta=beta)
-    c = iterate(ws, 50000)
-    if not_finite(c): return {'ws': ws, 'density': -1}
+    sys = sample_system((2, max_n), constrain=constrain, bval=bval, rng=rng, beta=beta)
+    c = iterate(sys, 50000)
+    if not_finite(c): return {'system': sys, 'density': -1}
     try:
         img = render(c, 256, binary=True)
     except:
-        return {'ws': ws, 'density': -2}
+        return {'system': sys, 'density': -2}
     x = np.count_nonzero(img) / img.size
-    return {'ws': ws, 'density': x}
+    return {'system': sys, 'density': x}
 
 
 def random_search(search_size, workers=1, cutoff=0.05, **kwargs):
@@ -399,13 +468,13 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=2, help='Number of worker processes')
     parser.add_argument('--bval', type=float, default=1)
     parser.add_argument('--max_n', type=int, default=4)
-    parser.add_argument('--beta', type=float, default=30)
+    parser.add_argument('--beta', type=float, default=None)
     args = parser.parse_args()
 
     print(args)
     print(f'Performing random search over {args.search_size} systems...')
     kwargs = {k:getattr(args,k) for k in ('constrain', 'bval', 'max_n', 'beta')}
-    ws = random_search(
+    sys = random_search(
         args.search_size,
         workers=args.workers,
         **kwargs
@@ -413,5 +482,5 @@ if __name__ == '__main__':
 
     if args.save_path:
         import pickle
-        pickle.dump({'params': ws, 'hparams': kwargs}, open(args.save_path, 'wb'))
+        pickle.dump({'params': sys, 'hparams': kwargs}, open(args.save_path, 'wb'))
         print(f'Saved to {args.save_path}')
