@@ -38,8 +38,11 @@ class SaveConfig(pl.callbacks.Callback):
     def on_train_start(self, trainer, pl_module):
         logger = trainer.logger
         for lg in logger:
-            if hasattr(lg, 'log_dir'):
-                with open(f'{lg.log_dir}/config.yaml', 'w') as f:
+            dir = None
+            if hasattr(lg, 'log_dir'): dir = lg.log_dir
+            elif hasattr(lg._experiment, 'dir'): dir = lg._experiment.dir
+            if dir:
+                with open(f'{dir}/hydra-config.yaml', 'w') as f:
                     f.write(OmegaConf.to_yaml(self.cfg))
 
 
