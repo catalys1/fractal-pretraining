@@ -2,6 +2,7 @@ from typing import Optional, Tuple
 
 from .datasets import medical
 from pytorch_lightning import LightningDataModule
+import torch
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -56,7 +57,7 @@ class GlaSDataModule(LightningDataModule):
             num_workers = self.num_workers,
             pin_memory = self.pin_memory,
             shuffle = True,
-            drop_last = True
+            drop_last = True,
         )
 
     def val_dataloader(self):
@@ -73,5 +74,16 @@ class GlaSDataModule(LightningDataModule):
             num_workers = self.num_workers,
             pin_memory = self.pin_memory,
             shuffle = False,
-            drop_last = False
+            drop_last = False,
+            collate_fn = val_collate_fn,
         )
+
+
+def val_collate_fn(batch):
+    imgs = [x[0] for x in batch]
+    masks = [x[1] for x in batch]
+    w = max(x.shape[-1] for x in imgs)
+    h = max(x.shape[-2] for x in imgs)
+    imgs = [torch.nn.functional.pad(x, (0, w-x.shape[-1], 0, h-x.shape[-2])) for x in imgs]
+    masks = [torch.nn.functional.pad(x, (0, w-x.shape[-1], 0, h-x.shape[-2])) for x in masks]
+    return torch.stack(imgs, 0), torch.stack(masks, 0)
