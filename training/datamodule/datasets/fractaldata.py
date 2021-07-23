@@ -25,6 +25,7 @@ class FractalClassDataset(object):
         self.num_systems = num_systems
         self.num_class = num_class
         self.per_class = per_class
+        self.per_system = num_class * per_class / num_systems
         self.params = pickle.load(open(param_file, 'rb'))['params'][:num_systems]
 
         # TODO: logic for creating classes from multiple systems (might want to decouple it)
@@ -42,17 +43,23 @@ class FractalClassDataset(object):
                 T.RandomVerticalFlip()
             ])
 
-    def render_img(self, idx):
-        label = idx % self.num_class
-        params = self.params[label]['system']
-        img = self.generator(params)
-        return img
+    def get_label(self, idx):
+        return int(idx // self.num_class)
+
+    def get_system(self, idx):
+        return int(idx // self.per_system)
 
     def get_img(self, idx):
-        img = self.render_img(idx)
+        sysidx = self.get_system(idx)
+        img = self.render_img(sysidx)
         img = torch.from_numpy(img).float().mul_(1/255.).permute(2,0,1)
-        label = idx % self.num_class
+        label = self.get_label(idx)
         return img, label
+
+    def render_img(self, sysidx):
+        params = self.params[sysidx]['system']
+        img = self.generator(params)
+        return img
 
     def __len__(self):
         return self.num_class * self.per_class
