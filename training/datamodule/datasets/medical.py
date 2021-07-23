@@ -3,6 +3,7 @@ import random
 from typing import Callable, Optional, Tuple, Union
 
 from PIL import Image
+import numpy as np
 import torch
 import torchvision
 
@@ -94,7 +95,7 @@ class ToTensor(object):
         img = imgs[0]
         mask = imgs[1]
         return [torchvision.transforms.functional.to_tensor(img),
-                torchvision.transforms.functional.pil_to_tensor(mask)]
+                torch.as_tensor(np.array(mask), dtype=torch.int64)[None]]
 
 
 class Compose(object):
