@@ -146,8 +146,10 @@ class IFSGenerator(_GeneratorBase):
             k = int(self.jitter_params.split('-')[1]) / 10
             choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
             self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
-        else:
+        elif jitter_params:
             self.jitter_fnc = self._basic_jitter
+        else:
+            self.jitter_fnc = lambda x: x
 
     def render(self, sys):
         rng = self.rng
