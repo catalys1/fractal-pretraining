@@ -9,11 +9,12 @@ trainer:
 data:
   num_workers: 4
   num_class: 1000
+  num_systems: 1000
   per_class: 1000
   generator:
     _target_: datamodule.datasets.fractaldata.IFSGenerator
     size: ${data.size}
-    jitter_params: fractaldb-4
+    jitter_params: False
     flips: True
     scale:
       - 0.5

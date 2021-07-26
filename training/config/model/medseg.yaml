@@ -1,6 +1,6 @@
 _target_: model.glas.GlaSSegmentationModel
 model:
-  _target_: segmentation_models_pytorch.UnetPlusPlus
+  _target_: segmentation_models_pytorch.Unet
   encoder_name: resnet50
   encoder_weights: null
   classes: 1

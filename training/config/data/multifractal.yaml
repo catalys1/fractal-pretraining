@@ -7,9 +7,10 @@ batch_size: 32
 num_workers: 4
 pin_memory: True
 size: 224
-data_file: ifs_constrained-search-15k.pkl
+data_file: ifs-100k.pkl
+num_systems: 1000
 num_class: 1000
-dataset_size: 1000000
+per_class: 1000
 normalize: center
 period: 2
 generator:
@@ -22,6 +23,6 @@ generator:
   size_range:
     -0.15
     -0.6
-  jitter_params: fractaldb-4
+  jitter_params: False
   niter: 100000
   patch: True
