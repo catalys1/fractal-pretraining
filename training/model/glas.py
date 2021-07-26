@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
-from torchmetrics import IoU
+from torchmetrics import Metric
+import wandb
 
 
 class GlaSSegmentationModel(LightningModule):
@@ -37,8 +38,8 @@ class GlaSSegmentationModel(LightningModule):
         self.setup_metrics()
 
     def setup_metrics(self):
-        self.train_iou = IoU(1)
-        self.val_iou = IoU(1)
+        self.train_iou = MeanIoU(1)
+        self.val_iou = MeanIoU(1)
         self.metric_hist = {
             "train/iou": [],
             "train/loss": [],
@@ -57,6 +58,7 @@ class GlaSSegmentationModel(LightningModule):
 
     def training_step(self, batch: Any, batch_idx: int):
         x, y = batch
+        y = y.gt(0).byte()
         if self.hparams.mixup:
             x, y = mixup(x, y)
         loss, probs, targets = self.step([x, y])
@@ -77,6 +79,7 @@ class GlaSSegmentationModel(LightningModule):
 
     def validation_step(self, batch: Any, batch_idx: int):
         x, y = batch
+        y = y.gt(0).byte()
         h, w = x.shape[-2:]
         x = torch.cat([x[:,:,:448,:448], x[:,:,h-448:,:448], x[:,:,:448,w-448:], x[:,:,h-448:,w-448:]])
         y = torch.cat([y[:,:,:448,:448], y[:,:,h-448:,:448], y[:,:,:448,w-448:], y[:,:,h-448:,w-448:]])
@@ -86,6 +89,23 @@ class GlaSSegmentationModel(LightningModule):
         iou = self.val_iou(probs, targets)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
         self.log("val/iou", iou, on_step=False, on_epoch=True, prog_bar=True)
+
+        # log example segmentations
+        if batch_idx == 0:
+            preds = probs.ge(0.5)
+            masked = [
+                wandb.Image(
+                    xx.permute(1,2,0).cpu().numpy(),
+                    masks={
+                    'predicted': {'mask_data': p.squeeze().cpu().numpy()},
+                    'truth': {'mask_data': yy.squeeze().cpu().numpy()}
+                })
+                for xx, yy, p in zip(x[::4], y[::4], preds[::4])
+            ]
+            self.trainer.logger.experiment[0].log({
+                'val/examples': masked, 'global_step': self.trainer.global_step
+            })
+
 
         return {"loss": loss, "probs": probs, "targets": targets}
 
@@ -171,6 +191,7 @@ class SoftDiceLoss(torch.nn.Module):
         super().__init__()
 
     def forward(self, pred, target):
+        # breakpoint()
         b = pred.shape[0]
         pred = pred.view(b, -1)
         target = target.view(b, -1)
@@ -179,6 +200,60 @@ class SoftDiceLoss(torch.nn.Module):
         t_sum = target.sum(1)
         dice = intersect.mul(2).div(p_sum + t_sum + 1e-6).mean()
         return 1 - dice
+
+
+class MeanIoU(Metric):
+    def __init__(
+        self,
+        num_classes: int = 1,
+        normalize: Optional[str] = None,
+        threshold: float = 0.5,
+        multilabel: bool = False,
+        compute_on_step: bool = True,
+        dist_sync_on_step: bool = False,
+        process_group: Optional[Any] = None,
+    ) -> None:
+        super().__init__(
+            compute_on_step=compute_on_step,
+            dist_sync_on_step=dist_sync_on_step,
+            process_group=process_group,
+        )
+        self.num_classes = num_classes
+        self.normalize = normalize
+        self.threshold = threshold
+        self.multilabel = multilabel
+
+        allowed_normalize = ('true', 'pred', 'all', 'none', None)
+        if self.normalize not in allowed_normalize:
+            raise ValueError(f"Argument average needs to one of the following: {allowed_normalize}")
+
+        default = torch.zeros(num_classes)
+        self.add_state("iou", default=default, dist_reduce_fx="sum")
+        self.add_state("total", default=default, dist_reduce_fx="sum")
+
+    def update(self, preds, target):
+        if preds.dtype == torch.float32:
+            preds = preds.ge(self.threshold).byte()
+        if target.dtype == torch.float32:
+            target = target.ge(self.threshold).byte()
+        dim = 2 if self.multilabel else 1
+        intersection = preds.mul(target).flatten(dim).sum(-1)
+        union = preds.logical_or(target).flatten(dim).sum(-1)
+        mask = union.eq(0)
+        iou = intersection.float() / union
+        iou[mask] = 0
+        mask = mask.logical_not()
+        iou = iou.sum(0)
+        total = mask.sum(0)
+        self.iou += iou
+        self.total += total
+
+    def compute(self):
+        return self.iou.div(self.total).mean()
+
+    @property
+    def is_differentiable(self):
+        return False
 
 
 def mixup(imgs, masks, alpha=0.5):
