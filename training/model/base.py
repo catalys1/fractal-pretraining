@@ -6,7 +6,7 @@ from pytorch_lightning import LightningModule
 from torchmetrics import Accuracy
 
 
-class ClassificationModel(LightningModule):
+class _BaseModule(LightningModule):
     """
     A LightningModule organizes your PyTorch code into 5 sections:
         - Computations (init).
@@ -18,7 +18,6 @@ class ClassificationModel(LightningModule):
     Read the docs:
         https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html
     """
-
     def __init__(
         self,
         model: torch.nn.Module,
@@ -41,8 +40,11 @@ class ClassificationModel(LightningModule):
             self.hparams.loss_fn = getattr(loss_fn, '__name__', loss_fn.__class__.__name__)
 
         self.model = model
-        self.loss_fn = loss_fn if loss_fn is not None else torch.nn.CrossEntropyLoss()
+        self.setup_loss_fn(loss_fn)
         self.setup_metrics()
+
+    def setup_loss_fn(self, loss_fn):
+        self.loss_fn = loss_fn if loss_fn is not None else torch.nn.CrossEntropyLoss()
 
     def setup_metrics(self):
         self.train_accuracy = Accuracy()
@@ -57,60 +59,18 @@ class ClassificationModel(LightningModule):
     def forward(self, x: torch.Tensor):
         return self.model(x)
 
-    def step(self, batch: Any):
-        x, y = batch
-        logits = self.forward(x)
-        loss = self.loss_fn(logits, y)
-        with torch.no_grad():
-            preds = torch.argmax(logits, dim=1)
-        return loss, preds, y
-
-    def training_step(self, batch: Any, batch_idx: int):
-        loss, preds, targets = self.step(batch)
-
-        # log train metrics
-        acc = self.train_accuracy(preds, targets)
-        self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False)
-        self.log("train/acc", acc, on_step=True, on_epoch=False, prog_bar=True)
-
-        return {"loss": loss, "preds": preds, "targets": targets}
+    def epoch_end_log(self, prefix='train'):
+        for metric in self.metric_hist:
+            if metric.startswith(prefix):
+                self.metric_hist[metric].append(self.trainer.callback_metrics[metric])
+                decide = min if 'loss' in metric else max
+                self.log(metric+'_best', decide(self.metric_hist[metric]), prog_bar=False)
 
     def training_epoch_end(self, outputs: List[Any]):
-        # log best so far train acc and train loss
-        self.metric_hist["train/acc"].append(self.trainer.callback_metrics["train/acc"])
-        self.metric_hist["train/loss"].append(self.trainer.callback_metrics["train/loss"])
-        self.log("train/acc_best", max(self.metric_hist["train/acc"]), prog_bar=False)
-        self.log("train/loss_best", min(self.metric_hist["train/loss"]), prog_bar=False)
-
-    def validation_step(self, batch: Any, batch_idx: int):
-        loss, preds, targets = self.step(batch)
-
-        # log val metrics
-        acc = self.val_accuracy(preds, targets)
-        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("val/acc", acc, on_step=False, on_epoch=True, prog_bar=True)
-
-        return {"loss": loss, "preds": preds, "targets": targets}
+        self.epoch_end_log('train')
 
     def validation_epoch_end(self, outputs: List[Any]):
-        # log best so far val acc and val loss
-        self.metric_hist["val/acc"].append(self.trainer.callback_metrics["val/acc"])
-        self.metric_hist["val/loss"].append(self.trainer.callback_metrics["val/loss"])
-        self.log("val/acc_best", max(self.metric_hist["val/acc"]), prog_bar=False)
-        self.log("val/loss_best", min(self.metric_hist["val/loss"]), prog_bar=False)
-
-    def test_step(self, batch: Any, batch_idx: int):
-        loss, preds, targets = self.step(batch)
-
-        # log test metrics
-        acc = self.test_accuracy(preds, targets)
-        self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/acc", acc, on_step=False, on_epoch=True)
-
-        return {"loss": loss, "preds": preds, "targets": targets}
-
-    def test_epoch_end(self, outputs: List[Any]):
-        pass
+        self.epoch_end_log('val')
 
     def configure_optimizers(self):
         hp = self.hparams
@@ -156,7 +116,7 @@ class ClassificationModel(LightningModule):
             params=params, lr=lr, weight_decay=hp.weight_decay, **(hp.optim_kwargs or {})
         )
 
-        # optinally add a OneCycle scheduler
+        # optionally add a OneCycle scheduler
         if self.hparams.training_steps is not None:
             lrs = [pg.get('lr', lr) for pg in params]
             steps = hp.training_steps
@@ -167,3 +127,67 @@ class ClassificationModel(LightningModule):
             return [optim], [{'scheduler': sched, 'interval': 'step', 'name': 'lr'}]
 
         return optim
+
+
+class ClassificationModel(_BaseModule):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        lr: float = 0.002,
+        weight_decay: float = 0.0001,
+        warmup: float = 0.1,
+        training_steps: Optional[int] = None,
+        loss_fn: Optional[Callable] = None,
+        optim_name: str = 'AdamW',
+        optim_kwargs: Optional[Dict] = None,
+        **kwargs
+    ):
+        super().__init__(
+            model=model,
+            lr=lr,
+            weight_decay=weight_decay,
+            warmup=warmup,
+            training_steps=training_steps,
+            loss_fn=loss_fn,
+            optim_name=optim_name,
+            optim_kwargs=optim_kwargs
+        )
+
+    def step(self, batch: Any):
+        x, y = batch
+        logits = self(x)
+        loss = self.loss_fn(logits, y)
+        with torch.no_grad():
+            preds = torch.argmax(logits, dim=1)
+        return loss, preds, y
+
+    def training_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets = self.step(batch)
+
+        # log train metrics
+        acc = self.train_accuracy(preds, targets)
+        self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False)
+        self.log("train/acc", acc, on_step=True, on_epoch=False, prog_bar=True)
+
+        return {"loss": loss, "preds": preds, "targets": targets}
+
+    def validation_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets = self.step(batch)
+
+        # log val metrics
+        acc = self.val_accuracy(preds, targets)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("val/acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        return {"loss": loss, "preds": preds, "targets": targets}
+
+    def test_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets = self.step(batch)
+
+        # log test metrics
+        acc = self.test_accuracy(preds, targets)
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
+        self.log("test/acc", acc, on_step=False, on_epoch=True)
+
+        return {"loss": loss, "preds": preds, "targets": targets}
+
