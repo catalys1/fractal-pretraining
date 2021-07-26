@@ -76,7 +76,7 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
         n = rng.integers(*n)
         
     if beta is None:
-        beta = ((5 + n) / 2, (5 + n) / 2 + 0.5)
+        beta = ((5 + n) / 2, (6 + n) / 2)
         
     if constrain:
         # sample a matrix with singular values < 1 (a contraction)
@@ -92,7 +92,7 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
         rmat[:, 1, 1] = cc
         uv = rmat @ base
         u, v = uv[:n], uv[n:]
-        # 2. sample the singular values: smax ~ Beta(beta, 1.1), smin ~ Uniform(min(0.01, smax), smax)
+        # 2. sample the singular values
         a = rng.uniform(*beta)
         s = sample_svs(n, a, rng)
         # 3. sample the translation parameters from Uniform(-bval, bval) and create the transformation matrix
