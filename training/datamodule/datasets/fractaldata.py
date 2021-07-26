@@ -20,7 +20,7 @@ class FractalClassDataset(object):
         num_class: int = 1000,
         per_class: int = 100,
         generator: Optional[Callable] = None,
-        queue_size: int = 0,
+        cache_size: int = 0,
     ):
         self.num_systems = num_systems
         self.num_class = num_class
@@ -30,12 +30,12 @@ class FractalClassDataset(object):
 
         self.generator = generator or IFSGenerator()
 
-        self.queue_size = queue_size
-        self.queue = None
-        if queue_size > 0:
-            self.queue = []
+        self.cache_size = cache_size
+        self.cache = None
+        if cache_size > 0:
+            self.cache = []
             T = torchvision.transforms
-            self.queue_tform = torchvision.transforms.Compose([
+            self.cache_tform = torchvision.transforms.Compose([
                 T.RandomAffine(10, (0.1, 0.1), (0.7, 0.95), interpolation=T.functional.InterpolationMode.BILINEAR),
                 T.RandomHorizontalFlip(),
                 T.RandomVerticalFlip()
@@ -63,16 +63,16 @@ class FractalClassDataset(object):
         return self.num_class * self.per_class
 
     def __getitem__(self, idx):
-        if self.queue is None or len(self.queue) < self.queue_size:
+        if self.cache is None or len(self.cache) < self.cache_size:
             img, label = self.get_img(idx)
-            if self.queue is not None:
-                self.queue.append((img, label))
+            if self.cache is not None:
+                self.cache.append((img, label))
         elif np.random.default_rng().random() < 0.5:
             img, label = self.get_img(idx) 
-            self.queue[idx % self.queue_size] = (img, label)
+            self.cache[idx % self.cache_size] = (img, label)
         else:
-            img, label = self.queue[idx % self.queue_size]
-            img = self.queue_tform(img)
+            img, label = self.cache[idx % self.cache_size]
+            img = self.cache_tform(img)
 
         return img, label
 

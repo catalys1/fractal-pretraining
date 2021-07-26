@@ -12,3 +12,4 @@ num_class: 1000
 per_class: 1000
 generator: null
 normalize: center
+cache_size: 512

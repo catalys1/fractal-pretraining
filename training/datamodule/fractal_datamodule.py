@@ -34,10 +34,10 @@ class FractalClassDataModule(LightningDataModule):
         data_file: str = None,
         num_systems: int = 1000,
         num_class: int = 1000,
-        per_class: int = 100,
+        per_class: int = 1000,
         generator: Optional[Callable] = None,
         normalize: Optional[str] = None,
-        queue_size: int = 0,
+        cache_size: int = 0,
         **kwargs,
     ):
         super().__init__()
@@ -52,7 +52,7 @@ class FractalClassDataModule(LightningDataModule):
         self.per_class = per_class
         self.generator = generator
         self.normalize = normalize
-        self.queue_size = queue_size
+        self.cache_size = cache_size
 
         # self.dims is returned when you call datamodule.size()
         self.dims = (3, size, size)
@@ -72,7 +72,7 @@ class FractalClassDataModule(LightningDataModule):
             num_class=self.num_class,
             per_class=self.per_class,
             generator=self.generator,
-            queue_size=self.queue_size
+            cache_size=self.cache_size
         )
         self.data_val = self.data_train
         self.data_test = None
