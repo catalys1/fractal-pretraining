@@ -113,8 +113,9 @@ class MultiLabelFractalDataModule(LightningDataModule):
         pin_memory: bool = True,
         size: int = 256,
         data_file: str = None,
+        num_systems: int = 1000,
         num_class: int = 1000,
-        dataset_size: int = 1000000,
+        per_class: int = 1000,
         generator: Optional[Callable] = None,
         normalize: Optional[str] = None,
         period: int = 2,
@@ -128,8 +129,9 @@ class MultiLabelFractalDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
+        self.num_systems = num_systems
         self.num_class = num_class
-        self.dataset_size = dataset_size
+        self.per_class = per_class
         self.period = period
         self.generator = generator
         self.normalize = normalize
@@ -148,7 +150,13 @@ class MultiLabelFractalDataModule(LightningDataModule):
         else:
             self.data_file = self.data_dir + self.data_file
         self.data_train = fractaldata.MultiFractalDataset(
-            self.data_file, self.num_class, self.dataset_size, self.generator, self.period)
+            self.data_file,
+            num_systems = self.num_systems,
+            num_class = self.num_class,
+            per_class = self.per_class,
+            generator = self.generator,
+            period = self.period,
+        )
         self.data_val = self.data_train
         self.data_test = None
 
