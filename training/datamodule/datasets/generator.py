@@ -28,14 +28,14 @@ class _GeneratorBase(object):
 
         self.rng = np.random.default_rng()
         self.cache = {'fg': [], 'bg': []}
-        self._set_jitter(jitter)
+        self._set_jitter()
 
-    def _set_jitter(self, jitter):
+    def _set_jitter(self):
         if isinstance(self.jitter_params, str) and self.jitter_params.startswith('fractaldb'):
             k = int(self.jitter_params.split('-')[1]) / 10
             choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
             self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
-        elif jitter_params:
+        elif self.jitter_params:
             self.jitter_fnc = self._basic_jitter
         else:
             self.jitter_fnc = lambda x: x
@@ -143,7 +143,7 @@ class IFSGenerator(_GeneratorBase):
 
         self.rng = np.random.default_rng()
         self.cache = {'fg': [], 'bg': []}
-        self._set_jitter(jitter)
+        self._set_jitter()
 
     def render(self, sys):
         rng = self.rng
@@ -223,7 +223,7 @@ class MultiGenerator(_GeneratorBase):
         self.cache = {'fg': [], 'bg': [], 'label': []}
         self.idx = 0
 
-        self._set_jitter(jitter)
+        self._set_jitter()
 
     def __len__(self):
         return len(self.cache['fg'])
