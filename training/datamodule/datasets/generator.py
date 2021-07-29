@@ -27,15 +27,18 @@ class _GeneratorBase(object):
         self.patch = patch
 
         self.rng = np.random.default_rng()
-
         self.cache = {'fg': [], 'bg': []}
+        self._set_jitter(jitter)
 
+    def _set_jitter(self, jitter):
         if isinstance(self.jitter_params, str) and self.jitter_params.startswith('fractaldb'):
             k = int(self.jitter_params.split('-')[1]) / 10
             choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
             self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
-        else:
+        elif jitter_params:
             self.jitter_fnc = self._basic_jitter
+        else:
+            self.jitter_fnc = lambda x: x
 
     def _fractaldb_jitter(self, sys, choices=(.8,.9,1,1.1,1.2)):
         n = len(sys)
@@ -139,17 +142,8 @@ class IFSGenerator(_GeneratorBase):
         self.patch = patch
 
         self.rng = np.random.default_rng()
-
-        self.cache = {'fg': None, 'bg': None}
-
-        if isinstance(self.jitter_params, str) and self.jitter_params.startswith('fractaldb'):
-            k = int(self.jitter_params.split('-')[1]) / 10
-            choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
-            self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
-        elif jitter_params:
-            self.jitter_fnc = self._basic_jitter
-        else:
-            self.jitter_fnc = lambda x: x
+        self.cache = {'fg': [], 'bg': []}
+        self._set_jitter(jitter)
 
     def render(self, sys):
         rng = self.rng
@@ -206,7 +200,7 @@ class MultiGenerator(_GeneratorBase):
         cache_size: int = 512,
         n_objects: Tuple[int, int] = (1, 5),
         size_range: Tuple[float, float] = (0.15, 0.6),
-        jitter_params: Union[bool, str] = True,
+        jitter_params: Union[bool, str] = False,
         flips: bool = True,
         sigma: Optional[Tuple[float, float]] = (0.5, 1.0),
         blur_p: Optional[float] = 0.5,
@@ -229,12 +223,7 @@ class MultiGenerator(_GeneratorBase):
         self.cache = {'fg': [], 'bg': [], 'label': []}
         self.idx = 0
 
-        if isinstance(self.jitter_params, str) and self.jitter_params.startswith('fractaldb'):
-            k = int(self.jitter_params.split('-')[1]) / 10
-            choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
-            self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
-        else:
-            self.jitter_fnc = self._basic_jitter
+        self._set_jitter(jitter)
 
     def __len__(self):
         return len(self.cache['fg'])
