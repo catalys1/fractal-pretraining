@@ -4,10 +4,10 @@ from typing import Any, Dict, List, Optional
 import torch
 from torchmetrics import Accuracy, F1
 
-from .base import ClassificationModel
+from .base import _BaseModule
 
 
-class MultiLabelModel(ClassificationModel):
+class MultiLabelModel(_BaseModule):
     """
     """
     def __init__(
@@ -22,10 +22,19 @@ class MultiLabelModel(ClassificationModel):
         optim_kwargs: Optional[Dict] = None,
         **kwargs
     ):
-        loss_fn = loss_fn if loss_fn is not None else torch.nn.functional.binary_cross_entropy_with_logits
         super().__init__(
-            model, lr, weight_decay, warmup, training_steps, loss_fn, optim_name, optim_kwargs
+            model=model,
+            lr=lr,
+            weight_decay=weight_decay,
+            warmup=warmup,
+            training_steps=training_steps,
+            loss_fn=loss_fn,
+            optim_name=optim_name,
+            optim_kwargs=optim_kwargs,
         )
+
+    def setup_loss_fn(self, loss_fn):
+        self.loss_fn = loss_fn or torch.nn.functional.binary_cross_entropy_with_logits
 
     def setup_metrics(self):
         self.train_accuracy = Accuracy()
@@ -45,7 +54,7 @@ class MultiLabelModel(ClassificationModel):
         x, y = batch
         logits = self.forward(x)
         y = torch.zeros(logits.shape, dtype=x.dtype, device=x.device).scatter_(1, y, 1)
-        w = torch.empty(logits.shape[1], dtype=x.dtype, device=x.device).fill_(200)
+        w = torch.empty(logits.shape[1], dtype=x.dtype, device=x.device).fill_(logits.shape[1] / 5)
         loss = self.loss_fn(logits, y, pos_weight=w)
         with torch.no_grad():
             preds = logits.sigmoid()
@@ -63,15 +72,6 @@ class MultiLabelModel(ClassificationModel):
 
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def training_epoch_end(self, outputs: List[Any]):
-        # log best so far train acc and train loss
-        self.metric_hist["train/acc"].append(self.trainer.callback_metrics["train/acc"])
-        self.metric_hist["train/f1"].append(self.trainer.callback_metrics["train/f1"])
-        self.metric_hist["train/loss"].append(self.trainer.callback_metrics["train/loss"])
-        self.log("train/acc_best", max(self.metric_hist["train/acc"]), prog_bar=False)
-        self.log("train/f1_best", max(self.metric_hist["train/f1"]), prog_bar=False)
-        self.log("train/loss_best", min(self.metric_hist["train/loss"]), prog_bar=False)
-
     def validation_step(self, batch: Any, batch_idx: int):
         loss, preds, targets = self.step(batch)
 
@@ -84,11 +84,3 @@ class MultiLabelModel(ClassificationModel):
 
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def validation_epoch_end(self, outputs: List[Any]):
-        # log best so far val acc and val loss
-        self.metric_hist["val/acc"].append(self.trainer.callback_metrics["val/acc"])
-        self.metric_hist["val/f1"].append(self.trainer.callback_metrics["val/f1"])
-        self.metric_hist["val/loss"].append(self.trainer.callback_metrics["val/loss"])
-        self.log("val/acc_best", max(self.metric_hist["val/acc"]), prog_bar=False)
-        self.log("val/f1_best", max(self.metric_hist["val/f1"]), prog_bar=False)
-        self.log("val/loss_best", min(self.metric_hist["val/loss"]), prog_bar=False)
