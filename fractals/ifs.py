@@ -23,8 +23,9 @@ def sample_svs(n, a, rng=None):
     Returns:
         Numpy array of shape (n, 2) containing the singular values.
     '''
-    if rng is None:
-        rng = np.random.default_rng()
+    if rng is None: rng = np.random.default_rng()
+    if a < 0: a == 0
+    elif a > 3*n: a == 3*n
     s = np.empty((n, 2))
     p = a
     q = a - 3*n + 3
@@ -177,6 +178,15 @@ def minmax(coords):
         if y > maxs[1]: maxs[1] = y
     return mins, maxs
 
+@numba.njit(cache=True)
+def _extent(region):
+    x1, y1, x2, y2 = region
+    xspan = x2 - x1
+    xspan = xspan if xspan > 0 else 1
+    yspan = y2 - y1
+    yspan = yspan if yspan > 0 else 1
+    return xspan, yspan
+
 
 @numba.njit(cache=True)
 def _render_binary(coords, s, region):
@@ -193,14 +203,25 @@ def _render_binary(coords, s, region):
         A binary image as an ndarray of shape (s, s).
     '''
     imgb = np.zeros((s, s), dtype=np.uint8)
-    mins, maxs = region[:2], region[2:]
-    ss = s - 1
+    xspan, yspan = _extent(region)
+    xscale = (s-1) / xspan
+    yscale = (s-1) / yspan
+    xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        r = int((coords[i,0] - mins[0]) / (maxs[0] - mins[0]) * ss)
-        c = int((coords[i,1] - mins[1]) / (maxs[1] - mins[1]) * ss)
+        rr = int((coords[i,0] - xmin) * xscale)
+        cc = int((coords[i,1] - ymin) * yscale)
         if r >= 0 and r < s and c >= 0 and c < s:
             imgb[r, c] = 1
     return imgb
+#     imgb = np.zeros((s, s), dtype=np.uint8)
+#     mins, maxs = region[:2], region[2:]
+#     ss = s - 1
+#     for i in range(len(coords)):
+#         r = int((coords[i,0] - mins[0]) / (maxs[0] - mins[0]) * ss)
+#         c = int((coords[i,1] - mins[1]) / (maxs[1] - mins[1]) * ss)
+#         if r >= 0 and r < s and c >= 0 and c < s:
+#             imgb[r, c] = 1
+#     return imgb
 
 @numba.njit(cache=True)
 def _render_binary_patch(coords, s, region, patch):
@@ -219,10 +240,13 @@ def _render_binary_patch(coords, s, region, patch):
         A grayscale image as an ndarray of shape (s, s).
     '''
     imgb = np.zeros((s, s), dtype=np.uint8)
-    mins, maxs = region[:2], region[2:]
+    xspan, yspan = _extent(region)
+    xscale = (s-1) / xspan
+    yscale = (s-1) / yspan
+    xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        rr = int((coords[i,0] - mins[0]) / (maxs[0] - mins[0]) * (s-1))
-        cc = int((coords[i,1] - mins[1]) / (maxs[1] - mins[1]) * (s-1))
+        rr = int((coords[i,0] - xmin) * xscale)
+        cc = int((coords[i,1] - ymin) * yscale)
         for j in range(len(patch)):
             r = rr + patch[j, 0] - 1
             c = cc + patch[j, 1] - 1
@@ -239,13 +263,18 @@ def _render_graded(coords, s, region):
     See _render_binary for an explanation of the arguments.
     '''
     imgf = np.zeros((s, s), dtype=np.float64)
-    mins, maxs = region[:2], region[2:]
+    xspan, yspan = _extent(region)
+    xscale = (s-1) / xspan
+    yscale = (s-1) / yspan
+    xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        r = int((coords[i,0] - mins[0]) / (maxs[0] - mins[0]) * (s-1))
-        c = int((coords[i,1] - mins[1]) / (maxs[1] - mins[1]) * (s-1))
+        rr = int((coords[i,0] - xmin) * xscale)
+        cc = int((coords[i,1] - ymin) * yscale)
         if r >= 0 and r < s and c >= 0 and c < s:
             imgf[r, c] += 1
-    imgf /= imgf.max()
+    mval = imgf.max()
+    if mval > 0:
+        imgf /= mval
     return imgf
 
 
@@ -258,16 +287,21 @@ def _render_graded_patch(coords, s, region, patch):
     See _render_binary_patch for an explanation of the arguments.
     '''
     imgf = np.zeros((s, s), dtype=np.float64)
-    mins, maxs = region[:2], region[2:]
+    xspan, yspan = _extent(region)
+    xscale = (s-1) / xspan
+    yscale = (s-1) / yspan
+    xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        rr = int((coords[i,0] - mins[0]) / (maxs[0] - mins[0]) * (s-1))
-        cc = int((coords[i,1] - mins[1]) / (maxs[1] - mins[1]) * (s-1))
+        rr = int((coords[i,0] - xmin) * xscale)
+        cc = int((coords[i,1] - ymin) * yscale)
         for j in range(len(patch)):
             r = rr + patch[j, 0] - 1
             c = cc + patch[j, 1] - 1
             if r >= 0 and r < s and c >= 0 and c < s:
                 imgf[r, c] += 1
-    imgf /= imgf.max()
+    mval = imgf.max()
+    if mval > 0:
+        imgf /= mval
     return imgf
 
 
@@ -294,7 +328,7 @@ def render(coords, s=256, binary=True, region=None, patch=False):
     else:
         region = np.asarray(region)
     if patch:
-        p = np.stack(np.divmod(np.arange(9)[np.random.randint(0, 2, (9,), dtype=np.bool)], 3), 1)
+        p = np.stack(np.divmod(np.arange(9)[np.random.randint(0, 2, (9,), dtype=bool)], 3), 1)
     if binary:
         if patch:
             return _render_binary_patch(coords, s, region, p)
@@ -367,10 +401,10 @@ def get_iters(x, min=50000, irange=50000, drange=(0.1, 0.3)):
     return min + int(np.clip(irange - irange / drange[1] * (x - drange[0]), 0, irange))
 
 
-def render_colored(coords, min_sat=0.3, min_val=0.5):
+def render_colored(coords, patch=False, min_sat=0.3, min_val=0.5):
     '''Performs colorize(render(coords, binary=False), min_sat, min_val).
     '''
-    r = render(coords, binary=False)
+    r = render(coords, binary=False, patch=patch)
     return colorize(r, min_sat, min_val)
 
 
