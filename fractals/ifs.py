@@ -61,7 +61,7 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
             to 1 when constrain is False. Default: 1.
         rng (Optional[numpy.random._generator.Generator]): random number generator. If None (default), it defaults
             to np.random.default_rng().
-        beta (Union[int,float]): range for weighted sum of singular values when constrain==True. Let 
+        beta (float or Tuple[float, float]): range for weighted sum of singular values when constrain==True. Let 
             q ~ U(beta[0], beta[1]), then we enforce $\sum_{i=0}^{n-1} (s^i_1 + 2*s^i_2) = q$.
     
     Returns:
@@ -457,6 +457,8 @@ def evaluate_system(*args, **kwargs):
 def random_search(search_size, workers=1, cutoff=0.05, **kwargs):
     '''Perform a random search over iterated function systems and return the set that meet the density cutoff
     requirement.
+
+    NOTE: This is an old version of searching over fractals. See random_systems for up-to-date approach.
     
     Args:
         search_size (int): number of randomly generated systems to search over.
@@ -493,28 +495,77 @@ def random_search(search_size, workers=1, cutoff=0.05, **kwargs):
     return proposed
 
 
+def random_systems(num_systems, n=(2,5), bval=None, beta=None):
+    '''Sample random systems.
+
+    Args:
+        num_systems (int): the number of systems to sample.
+        n (int or Tuple[int, int]): the size or range of sizes allowable for the systems.
+        bval (float): allowable magnitude of translation parameters.
+        beta (float or Tuple[float,float]): singular values constraint. See sample_systems.
+
+    Returns:
+        A list of dicts {'system': np.array} containing the system parameters.
+    '''
+    import tqdm
+    systems = []
+    for i in tqdm.trange(num_systems):
+        s = sample_system(n, bval=bval, beta=beta)
+        systems.append({'system': s})
+    return systems
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--save_path', type=str, default='')
-    parser.add_argument('--constrain', type=int, default=1)
-    parser.add_argument('--search_size', type=int, default=1000)
-    parser.add_argument('--workers', type=int, default=2, help='Number of worker processes')
-    parser.add_argument('--bval', type=float, default=1)
+    parser.add_argument('--num_systems', type=int, default=10000)
+    parser.add_argument('--min_n', type=int, default=2)
     parser.add_argument('--max_n', type=int, default=4)
-    parser.add_argument('--beta', type=float, default=None)
+    parser.add_argument('--bval', type=float, default=1)
+    parser.add_argument('--beta_min', type=float, default=None)
+    parser.add_argument('--beta_max', type=float, default=None)
     args = parser.parse_args()
 
-    print(args)
-    print(f'Performing random search over {args.search_size} systems...')
-    kwargs = {k:getattr(args,k) for k in ('constrain', 'bval', 'max_n', 'beta')}
-    sys = random_search(
-        args.search_size,
-        workers=args.workers,
-        **kwargs
+    beta = None
+    if args.beta_min:
+        if args.beta_max:
+            beta = (args.beta_min, args.beta_max)
+        beta = (args.beta_min, args.beta_min)
+
+    kwargs = dict(
+        num_systems=args.num_systems,
+        n=(args.min_n, args.max_n+1),
+        bval=args.bval,
+        beta=beta,
     )
+    sys = random_systems(**kwargs)
 
     if args.save_path:
         import pickle
         pickle.dump({'params': sys, 'hparams': kwargs}, open(args.save_path, 'wb'))
         print(f'Saved to {args.save_path}')
+
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--save_path', type=str, default='')
+    # parser.add_argument('--constrain', type=int, default=1)
+    # parser.add_argument('--search_size', type=int, default=1000)
+    # parser.add_argument('--workers', type=int, default=2, help='Number of worker processes')
+    # parser.add_argument('--bval', type=float, default=1)
+    # parser.add_argument('--max_n', type=int, default=4)
+    # parser.add_argument('--beta', type=float, default=None)
+    # args = parser.parse_args()
+
+    # print(args)
+    # print(f'Performing random search over {args.search_size} systems...')
+    # kwargs = {k:getattr(args,k) for k in ('constrain', 'bval', 'max_n', 'beta')}
+    # sys = random_search(
+    #     args.search_size,
+    #     workers=args.workers,
+    #     **kwargs
+    # )
+
+    # if args.save_path:
+    #     import pickle
+    #     pickle.dump({'params': sys, 'hparams': kwargs}, open(args.save_path, 'wb'))
+    #     print(f'Saved to {args.save_path}')
