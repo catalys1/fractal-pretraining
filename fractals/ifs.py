@@ -208,8 +208,8 @@ def _render_binary(coords, s, region):
     yscale = (s-1) / yspan
     xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        rr = int((coords[i,0] - xmin) * xscale)
-        cc = int((coords[i,1] - ymin) * yscale)
+        r = int((coords[i,0] - xmin) * xscale)
+        c = int((coords[i,1] - ymin) * yscale)
         if r >= 0 and r < s and c >= 0 and c < s:
             imgb[r, c] = 1
     return imgb
@@ -268,8 +268,8 @@ def _render_graded(coords, s, region):
     yscale = (s-1) / yspan
     xmin, ymin = region[0], region[1]
     for i in range(len(coords)):
-        rr = int((coords[i,0] - xmin) * xscale)
-        cc = int((coords[i,1] - ymin) * yscale)
+        r = int((coords[i,0] - xmin) * xscale)
+        c = int((coords[i,1] - ymin) * yscale)
         if r >= 0 and r < s and c >= 0 and c < s:
             imgf[r, c] += 1
     mval = imgf.max()
