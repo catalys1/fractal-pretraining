@@ -31,10 +31,13 @@ class _GeneratorBase(object):
         self._set_jitter()
 
     def _set_jitter(self):
-        if isinstance(self.jitter_params, str) and self.jitter_params.startswith('fractaldb'):
-            k = int(self.jitter_params.split('-')[1]) / 10
-            choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
-            self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
+        if isinstance(self.jitter_params, str):
+            if self.jitter_params.startswith('fractaldb'):
+                k = int(self.jitter_params.split('-')[1]) / 10
+                choices = np.linspace(1-2*k, 1+2*k, 5, endpoint=True)
+                self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
+            elif self.jitter_params.startswith('svd'):
+                self.jitter_fnc = self._svd_jitter
         elif self.jitter_params:
             self.jitter_fnc = self._basic_jitter
         else:
@@ -50,6 +53,25 @@ class _GeneratorBase(object):
         # tweak system parameters--randomly choose one transform and scale it
         n = len(sys)
         sys[self.rng.integers(0, n)] *= self.rng.uniform(*prange)
+        return sys
+
+    def _svd_jitter(self, sys):
+        '''Jitter the parameters of one of the systems functions, in SVD space.'''
+        k = self.rng.integers(0, len(sys) * 3)
+        sidx, pidx = divmod(k, 3)
+        if pidx < 2:
+            q = self.rng.uniform(-0.5, 0.5)
+            u, s, v = np.linalg.svd(sys[sidx, :, :2])
+            cq, sq = np.cos(q), np.sin(q)
+            r = np.array([[cq, -sq], [sq, cq]])
+            if pidx == 0:
+                u = r @ u
+            else:
+                v = r @ v
+            sys[sidx, :, :2] = (u * s[None,:]) @ v
+        else:
+            x, y = self.rng.uniform(-0.5, 0.5, (2,))
+            sys[sidx, :, 2] += [x, y]
         return sys
 
     def jitter(self, sys):
