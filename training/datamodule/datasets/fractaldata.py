@@ -122,3 +122,35 @@ class MultiFractalDataset(object):
 
         return img, labels
         
+
+class FractalUnsupervisedDataset(object):
+    def __init__(
+        self,
+        param_file: str,
+        num_systems: int = 1000000,
+        per_system: int = 1,
+        generator: Optional[Callable] = None,
+        period: int = 2,
+    ):
+        self.num_systems = num_systems
+        self.per_system = per_system
+        self.params = pickle.load(open(param_file, 'rb'))['params'][:num_systems]
+
+        self.generator = generator or SelfSupervisedGenerator()
+
+        self.steps = 0
+        self.period = period
+
+    def __len__(self):
+        return len(self.params) * self.per_system
+
+    def __getitem__(self, idx):
+        # whether it's time to render a new fractal or not
+        self.steps = (self.steps + 1) % self.period
+        sample = self.steps == 0
+        idx = int(idx // self.per_system)
+        params = self.params[idx]['system']
+        imgs = self.generator(params, label=label, new_sample=sample)
+        imgs = [torch.from_numpy(img).float().mul_(1/255.).permute(2,0,1) for img in imgs]
+
+        return imgs

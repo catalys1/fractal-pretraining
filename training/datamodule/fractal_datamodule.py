@@ -196,3 +196,83 @@ class MultiLabelFractalDataModule(LightningDataModule):
             labs[i, :len(labels[i])] = labels[i]
             labs[i, len(labels[i]):] = labels[i][-1]
         return imgs, labs
+
+
+class SelfSupervisedFractalDataModule(LightningDataModule):
+    """
+    """
+    def __init__(
+        self,
+        data_dir: str = "data/",
+        batch_size: int = 32,
+        num_workers: int = 4,
+        pin_memory: bool = True,
+        size: int = 224,
+        data_file: str = None,
+        num_systems: int = 1000000,
+        per_system: int = 1,
+        generator: Optional[Callable] = None,
+        normalize: Optional[str] = None,
+        period: int = 2,
+        **kwargs,
+    ):
+        super().__init__()
+
+        self.data_dir = data_dir
+        self.data_file = data_file
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+
+        self.num_systems = num_systems
+        self.per_systems = per_system
+        self.period = period
+        self.generator = generator
+        self.normalize = normalize
+
+        # self.dims is returned when you call datamodule.size()
+        self.dims = (3, size, size)
+
+        self.data_train: Optional[Dataset] = None
+        self.data_val: Optional[Dataset] = None
+        self.data_test: Optional[Dataset] = None
+
+    def setup(self, stage: Optional[str] = None):
+        """Load data. Set variables: self.data_train, self.data_val, self.data_test."""
+        if self.data_file is None:
+            self.data_file = self.data_dir + 'ifs-100k.pkl'
+        else:
+            self.data_file = self.data_dir + self.data_file
+        self.data_train = fractaldata.FractalUnsupervisedDataset(
+            self.data_file,
+            num_systems = self.num_systems,
+            per_system = self.per_system,
+            generator = self.generator,
+            period = self.period,
+        )
+        self.data_val = self.data_train
+        self.data_test = None
+
+    def train_dataloader(self):
+        if self.data_train is None:
+            self.setup()
+        return DataLoader(
+            dataset=self.data_train,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            shuffle=True,
+            drop_last=True,
+        )
+
+    def val_dataloader(self):
+        if self.data_val is None:
+            self.setup()
+        return DataLoader(
+            dataset=self.data_val,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            shuffle=False,
+            drop_last=False,
+        )

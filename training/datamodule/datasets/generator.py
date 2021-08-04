@@ -315,3 +315,102 @@ class MultiGenerator(_GeneratorBase):
             img = self.random_blur(img)
 
         return img, labels
+
+
+class SelfSupervisedGenerator(_GeneratorBase):
+    def __init__(
+        self,
+        size: int = 224,
+        cache_size: int = 512,
+        size_range: Tuple[float, float] = (0.25, 1.25),
+        jitter_params: Union[bool, str] = False,
+        flips: bool = True,
+        sigma: Optional[Tuple[float, float]] = (0.5, 2.0),
+        blur_p: Optional[float] = 0.5,
+        niter = 100000,
+        patch = True,
+    ):
+        self.size = size
+        self.size_range = size_range
+        self.jitter_params = jitter_params
+        self.flips = flips
+        self.sigma = sigma
+        self.blur_p = blur_p
+        self.niter = niter
+        self.patch = patch
+
+        self.rng = np.random.default_rng()
+
+        self.cache_size = cache_size
+        self.cache = {'fg': [], 'bg': []}
+        self.idx = 0
+
+        self._set_jitter()
+
+    def __len__(self):
+        return len(self.cache['fg'])
+
+    def _update_cache(self, fg, bg):
+        if len(self) < self.cache_size:
+            self.cache['fg'].append(fg)
+            self.cache['bg'].append(bg)
+        else:
+            self.cache['fg'][self.idx] = fg
+            self.cache['bg'][self.idx] = bg
+        self.idx = (self.idx + 1) % self.cache_size
+
+    def render(self, sys):
+        rng = self.rng
+        coords, region = self._iterate(sys)
+        img = ifs.render(coords, self.size, binary=False, region=region, patch=self.patch)
+        return img
+
+    def add_sample(self, sys):
+        sysc = self.jitter(sys)
+        frac = self.render(sysc)
+        bg = self.render_background()
+        self._update_cache(frac, bg)
+        return frac, bg
+
+    def generate(self, sys, new_sample=True):
+        rng = self.rng
+
+        if new_sample:
+            frac, bg1 = self.add_sample(sys)
+        else:
+            idx = rng.integers(0, len(self), 2)
+            frac = self.cache['fg'][idx[0]]
+            bg1 = self.cache['bg'][idx[1]]
+
+        fg1 = frac.copy()
+        fg2 = frac.copy()
+        bg1 = bg1.copy()
+        bg2 = self.cache['bg'][rng.integers(0, len(self))].copy()
+
+        imgs = []
+        for fg, img in zip([fg1, fg2], [bg1, bg2]):
+            # random flips
+            if self.flips:
+                fg = self.random_flips(fg)
+            fg = self.to_color(fg)
+            # random size
+            f = rng.uniform(*self.size_range)
+            s = int(f * self.size)
+            fg = resize(fg, (s, s), interpolation=INTER_LINEAR)
+            # random location
+            x, y = rng.integers(-(s//2), self.size-(s//2), 2)
+            x1 = 0 if x >= 0 else -x
+            x2 = s if x < self.size - s else self.size - x
+            y1 = 0 if y >= 0 else -y
+            y2 = s if y < self.size - s else self.size - y
+            fg = fg[y1:y2, x1:x2]
+            # add object to image
+            y = max(y, 0)
+            x = max(x, 0)
+            self.composite(fg, img[y:y+fg.shape[0], x:x+fg.shape[1]])
+            # randomly apply gaussian blur
+            if self.blur_p and rng.random() > 0.5:
+                img = self.random_blur(img)
+            imgs.append(img)
+
+        return imgs
