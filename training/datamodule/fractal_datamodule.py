@@ -225,7 +225,7 @@ class SelfSupervisedFractalDataModule(LightningDataModule):
         self.pin_memory = pin_memory
 
         self.num_systems = num_systems
-        self.per_systems = per_system
+        self.per_system = per_system
         self.period = period
         self.generator = generator
         self.normalize = normalize
