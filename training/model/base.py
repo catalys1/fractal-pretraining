@@ -72,7 +72,7 @@ class _BaseModule(LightningModule):
     def validation_epoch_end(self, outputs: List[Any]):
         self.epoch_end_log('val')
 
-    def configure_optimizers(self):
+    def _parameter_groups(self):
         hp = self.hparams
         lr = hp.lr
 
@@ -87,12 +87,18 @@ class _BaseModule(LightningModule):
             parts = name.split('.')
             param = self.model
             for p in parts:
-                param = getattr(param, p)
-            params.append({
-                'params': [param],
-                'lr': lr * pg['lr_factor'],
+                param = getattr(param, p, getattr(self, p))
+            if isinstance(param, torch.Tensor):
+                param = [param]
+            else:
+                param = param.parameters()
+            group = {
+                'params': param,
+                'lr': lr * pg.get('lr_factor', 1),
                 'weight_decay': pg.get('weight_decay', hp.weight_decay)
-            })
+            }
+            group.update({k: v for k, v in pg.items() if k not in ('lr_factor, weight_decay')})
+            params.append(group)
 
         # create parameter groups for not decaying bias and normalizaton parameters
         decay, no_decay = [], []
@@ -110,6 +116,14 @@ class _BaseModule(LightningModule):
             {'params': decay, 'weight_decay': hp.weight_decay},
             {'params': no_decay, 'weight_decay': 0.0},
         ])
+
+        return params
+
+    def configure_optimizers(self):
+        hp = self.hparams
+        lr = hp.lr
+
+        params = self._parameter_groups()
         
         # create optimizer
         optim = getattr(torch.optim, hp.optim_name, 'AdamW')(
