@@ -80,7 +80,7 @@ class _GeneratorBase(object):
     def _sval_jitter(self, sys):
         k = self.rng.integers(0, sys.shape[0])
         svs = np.linalg.svd(sys[...,:2], compute_uv=False)
-        fac = (sys * [1, 2]).sum()
+        fac = (svs * [1, 2]).sum()
         minf = 0.5 * (5 + sys.shape[0])
         maxf = minf + 0.5
         ss = svs[k, 0] + 2 * svs[k, 1]
