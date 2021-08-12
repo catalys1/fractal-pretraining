@@ -38,6 +38,8 @@ class _GeneratorBase(object):
                 self.jitter_fnc = partial(self._fractaldb_jitter, choices=choices)
             elif self.jitter_params.startswith('svd'):
                 self.jitter_fnc = self._svd_jitter
+            elif self.jitter_params.startswith('sval'):
+                self.jitter_fnc = self._sval_jitter
         elif self.jitter_params:
             self.jitter_fnc = self._basic_jitter
         else:
@@ -51,6 +53,7 @@ class _GeneratorBase(object):
 
     def _basic_jitter(self, sys, prange=(0.8, 1.1)):
         # tweak system parameters--randomly choose one transform and scale it
+        # this actually amounts to scaling the singular values by a random factor
         n = len(sys)
         sys[self.rng.integers(0, n)] *= self.rng.uniform(*prange)
         return sys
@@ -72,6 +75,21 @@ class _GeneratorBase(object):
         else:
             x, y = self.rng.uniform(-0.5, 0.5, (2,))
             sys[sidx, :, 2] += [x, y]
+        return sys
+
+    def _sval_jitter(self, sys):
+        k = self.rng.integers(0, sys.shape[0])
+        svs = np.linalg.svd(sys[...,:2], compute_uv=False)
+        fac = (sys * [1, 2]).sum()
+        minf = 0.5 * (5 + sys.shape[0])
+        maxf = minf + 0.5
+        ss = svs[k, 0] + 2 * svs[k, 1]
+        smin = (minf - fac + ss) / ss
+        smax = (maxf - fac + ss) / ss
+        m = self.rng.uniform(smin, smax)
+        u, s, v = np.linalg.svd(sys[k, :, :2])
+        s = s * m
+        sys[k, :, :2] = (u * s[None]) @ v
         return sys
 
     def jitter(self, sys):
