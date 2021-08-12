@@ -2,6 +2,7 @@
 defaults:
   - override /data: glas
   - override /model: medseg
+  - override /callback: default
 
 trainer:
   max_epochs: 90
