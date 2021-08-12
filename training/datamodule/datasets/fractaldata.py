@@ -9,7 +9,7 @@ import torch
 import torchvision
 
 from fractals import diamondsquare, ifs
-from .generator import IFSGenerator, MultiGenerator
+from .generator import IFSGenerator, MultiGenerator, SelfSupervisedGenerator
 
 
 class FractalClassDataset(object):
@@ -146,11 +146,11 @@ class FractalUnsupervisedDataset(object):
 
     def __getitem__(self, idx):
         # whether it's time to render a new fractal or not
-        self.steps = (self.steps + 1) % self.period
         sample = self.steps == 0
+        self.steps = (self.steps + 1) % self.period
         idx = int(idx // self.per_system)
         params = self.params[idx]['system']
-        imgs = self.generator(params, label=label, new_sample=sample)
+        imgs = self.generator(params, new_sample=sample)
         imgs = [torch.from_numpy(img).float().mul_(1/255.).permute(2,0,1) for img in imgs]
 
         return imgs
