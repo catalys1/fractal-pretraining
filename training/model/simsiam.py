@@ -1,5 +1,7 @@
 '''Based off of https://github.com/facebookresearch/simsiam/blob/main/simsiam/builder.py
 '''
+from typing import Callable, Dict, Optional
+
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -25,13 +27,13 @@ class SimSiam(_BaseModule):
         **kwargs
     ):
         super().__init__(
-            model=model
-            dim=dim
+            model=model,
+            dim=dim,
             pred_dim=pred_dim,
             lr=lr,
             weight_decay=weight_decay,
             warmup=warmup,
-            training_steps=train_steps,
+            training_steps=training_steps,
             loss_fn=loss_fn,
             optim_name=optim_name,
             optim_kwargs=optim_kwargs,
@@ -45,24 +47,25 @@ class SimSiam(_BaseModule):
 
         # build a 3-layer projector
         prev_dim = self.model.fc.weight.shape[1]
-        self.model.fc = nn.Sequential(nn.Linear(prev_dim, prev_dim, bias=False),
-                                        nn.BatchNorm1d(prev_dim),
-                                        nn.ReLU(inplace=True), # first layer
-                                        nn.Linear(prev_dim, prev_dim, bias=False),
-                                        nn.BatchNorm1d(prev_dim),
-                                        nn.ReLU(inplace=True), # second layer
-                                        self.model.fc,
-                                        nn.BatchNorm1d(dim, affine=False)) # output layer
-        self.model.fc[6].bias.requires_grad = False # hack: not use bias as it is followed by BN
+        self.model.fc = nn.Sequential(
+            nn.Linear(prev_dim, prev_dim, bias=False),
+            nn.BatchNorm1d(prev_dim),
+            nn.ReLU(inplace=True), # first layer
+            nn.Linear(prev_dim, prev_dim, bias=False),
+            nn.BatchNorm1d(prev_dim),
+            nn.ReLU(inplace=True), # second layer
+            nn.Linear(prev_dim, dim, bias=False),
+            nn.BatchNorm1d(dim, affine=False)) # output layer
 
         # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(dim, pred_dim, bias=False),
-                                        nn.BatchNorm1d(pred_dim),
-                                        nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(pred_dim, dim)) # output layer
+        self.predictor = nn.Sequential(
+            nn.Linear(dim, pred_dim, bias=False),
+            nn.BatchNorm1d(pred_dim),
+            nn.ReLU(inplace=True), # hidden layer
+            nn.Linear(pred_dim, dim)) # output layer
 
     def setup_loss_fn(self, loss_fn):
-        self.loss_fn = self.loss_fn or torch.nn.CosineSimilarity(dim=1)
+        self.loss_fn = loss_fn or torch.nn.CosineSimilarity(dim=1)
 
     def setup_metrics(self):
         self.metric_hist = {
@@ -89,10 +92,15 @@ class SimSiam(_BaseModule):
         return p1, p2, z1.detach(), z2.detach()
 
     def training_step(self, batch, batch_idx):
-        x1, x2, y = batch
+        x1, x2 = batch
         p1, p2, z1, z2 = self(x1, x2)
         loss = -0.5 * (self.loss_fn(p1, z2).mean() + self.loss_fn(p2, z1).mean())
 
         self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False)
 
-        return {"loss": loss, "preds": preds, "targets": targets}
+        return {"loss": loss}
+
+    def on_after_backward(self):
+        for pg in self.optimizers()._optimizer.param_groups:
+            if pg.get('fix_lr', False):
+                pg['lr'] = self.hparams.lr
