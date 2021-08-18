@@ -8,3 +8,10 @@ model_checkpoint:
   mode: min
   every_n_train_steps: $$computed[train_steps]
   save_weights_only: True
+
+full_checkpoint:
+  _target_: training.utils.ModelCheckpoint
+  filename: full-checkpoint
+  save_last: True
+  save_on_train_epoch_end: True
+  every_n_epochs: 1
