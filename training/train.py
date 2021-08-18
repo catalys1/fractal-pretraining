@@ -28,6 +28,7 @@ def train(cfg: DictConfig):
 
     computed = {}
     computed['ngpu'] = utils.ngpu(cfg)
+    computed['nodes'] = getattr(cfg.trainer, 'num_nodes', 1)
 
     # INITIALIZE: data
     # datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
@@ -35,7 +36,7 @@ def train(cfg: DictConfig):
     train_loader = datamodule.train_dataloader()
 
     computed['train_batches'] = len(train_loader)
-    computed['train_steps'] = computed['train_batches'] // (computed['ngpu'] or 1)
+    computed['train_steps'] = computed['train_batches'] // ((computed['ngpu'] or 1) * computed['nodes'])
     computed['total_train_steps'] = cfg.trainer.max_epochs * computed['train_steps']
 
     # INITIALIZE: model
