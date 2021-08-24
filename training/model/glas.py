@@ -4,11 +4,14 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
+from pytorch_lightning.utilities import rank_zero_only
 from torchmetrics import Metric
 import wandb
 
+from .base import _BaseModule
 
-class GlaSSegmentationModel(LightningModule):
+
+class GlaSSegmentationModel(_BaseModule):
     """
     """
     def __init__(
@@ -24,18 +27,20 @@ class GlaSSegmentationModel(LightningModule):
         mixup: bool = True,
         **kwargs
     ):
-        super().__init__()
+        super().__init__(
+            model=model,
+            lr=lr,
+            weight_decay=weight_decay,
+            warmup=warmup,
+            training_steps=training_steps,
+            loss_fn=loss_fn,
+            optim_name=optim_name,
+            optim_kwargs=optim_kwargs,
+            mixup=mixup,
+        )
 
-        # add to self.hparams and save to ckpt
-        self.save_hyperparameters(ignore='model loss_fn'.split())
-        if isinstance(model, torch.nn.Module):
-            self.hparams.model = model.__class__.__name__
-        if hasattr(loss_fn, '__call__'):
-            self.hparams.loss_fn = getattr(loss_fn, '__name__', loss_fn.__class__.__name__)
-
-        self.model = model
+    def setup_loss_fn(self, loss_fn):
         self.loss_fn = loss_fn if loss_fn is not None else SoftDiceLoss()
-        self.setup_metrics()
 
     def setup_metrics(self):
         self.train_iou = MeanIoU(1)
@@ -70,13 +75,6 @@ class GlaSSegmentationModel(LightningModule):
 
         return {"loss": loss, "probs": probs, "targets": targets}
 
-    def training_epoch_end(self, outputs: List[Any]):
-        # log best so far train iou and train loss
-        self.metric_hist["train/iou"].append(self.trainer.callback_metrics["train/iou"])
-        self.metric_hist["train/loss"].append(self.trainer.callback_metrics["train/loss"])
-        self.log("train/iou_best", max(self.metric_hist["train/iou"]), prog_bar=False)
-        self.log("train/loss_best", min(self.metric_hist["train/loss"]), prog_bar=False)
-
     def validation_step(self, batch: Any, batch_idx: int):
         x, y = batch
         y = y.gt(0).byte()
@@ -92,98 +90,25 @@ class GlaSSegmentationModel(LightningModule):
 
         # log example segmentations
         if batch_idx == 0:
-            preds = probs.ge(0.5)
-            masked = [
-                wandb.Image(
-                    xx.permute(1,2,0).cpu().numpy(),
-                    masks={
-                    'predicted': {'mask_data': p.squeeze().cpu().numpy()},
-                    'truth': {'mask_data': yy.squeeze().cpu().numpy()}
-                })
-                for xx, yy, p in zip(x[::4], y[::4], preds[::4])
-            ]
-            self.trainer.logger.experiment[0].log({
-                'val/examples': masked, 'global_step': self.trainer.global_step
-            })
-
+            self.log_masks(x[::4], y[::4], probs[::4])
 
         return {"loss": loss, "probs": probs, "targets": targets}
 
-    def validation_epoch_end(self, outputs: List[Any]):
-        # log best so far val iou and val loss
-        self.metric_hist["val/iou"].append(self.trainer.callback_metrics["val/iou"])
-        self.metric_hist["val/loss"].append(self.trainer.callback_metrics["val/loss"])
-        self.log("val/iou_best", max(self.metric_hist["val/iou"]), prog_bar=False)
-        self.log("val/loss_best", min(self.metric_hist["val/loss"]), prog_bar=False)
-
-    def test_step(self, batch: Any, batch_idx: int):
-        loss, probs, targets = self.step(batch)
-
-        # log test metrics
-        iou = self.test_iou(probs, targets)
-        self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/iou", iou, on_step=False, on_epoch=True)
-
-        return {"loss": loss, "probs": probs, "targets": targets}
-
-    def test_epoch_end(self, outputs: List[Any]):
-        pass
-
-    def configure_optimizers(self):
-        hp = self.hparams
-        lr = hp.lr
-
-        params = []
-
-        # handle manually specified param groups
-        pgs = hp.get('param_groups', {})
-        names = set()
-        for pg in pgs:
-            name = pg['name']
-            names.add(name)
-            parts = name.split('.')
-            param = self.model
-            for p in parts:
-                param = getattr(param, p)
-            params.append({
-                'params': [param],
-                'lr': lr * pg['lr_factor'],
-                'weight_decay': pg.get('weight_decay', hp.weight_decay)
+    @rank_zero_only
+    def log_masks(self, x, y, probs):
+        preds = probs.ge(0.5)
+        masked = [
+            wandb.Image(
+                xx.permute(1,2,0).cpu().numpy(),
+                masks={
+                'predicted': {'mask_data': p.squeeze().cpu().numpy()},
+                'truth': {'mask_data': yy.squeeze().cpu().numpy()}
             })
-
-        # create parameter groups for not decaying bias and normalizaton parameters
-        decay, no_decay = [], []
-        for mname, m in self.model.named_modules():
-            if mname in names: continue  # already handled above
-            if 'Norm' in m.__class__.__name__:  # normalization layers, such as BatchNorm2d
-                no_decay.extend(list(m.parameters()))
-            else:
-                for name, param in m.named_parameters(recurse=False):
-                    if f'{mname}.{name}' in names: continue  # already handled above
-                    if 'bias' in name: no_decay.append(param)  # bias parameters
-                    else: decay.append(param)
-
-        params.extend([
-            {'params': decay, 'weight_decay': hp.weight_decay},
-            {'params': no_decay, 'weight_decay': 0.0},
-        ])
-        
-        # create optimizer
-        optim = getattr(torch.optim, hp.optim_name, 'AdamW')(
-            params=params, lr=lr, weight_decay=hp.weight_decay, **(hp.optim_kwargs or {})
-        )
-
-        # optinally add a OneCycle scheduler
-        if self.hparams.training_steps is not None:
-            lrs = [pg.get('lr', lr) for pg in params]
-            steps = hp.training_steps
-            warmup = hp.warmup if hp.warmup < 1 else hp.warmup / steps
-            final_div = hp.get('final_div_factor', 1e4)
-            sched = torch.optim.lr_scheduler.OneCycleLR(
-                optim, max_lr=lrs, total_steps=steps, pct_start=warmup, final_div_factor=final_div)
-            return [optim], [{'scheduler': sched, 'interval': 'step', 'name': 'lr'}]
-
-        return optim
+            for xx, yy, p in zip(x, y, preds)
+        ]
+        self.trainer.logger.experiment[0].log({
+            'val/examples': masked, 'global_step': self.trainer.global_step
+        })
 
 
 class SoftDiceLoss(torch.nn.Module):
