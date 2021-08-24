@@ -31,7 +31,7 @@ def train(cfg: DictConfig):
 
     # INITIALIZE: data
     # datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
-    datamodule = hydra.utils.instantiate(cfg.data)
+    datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
     train_loader = datamodule.train_dataloader()
 
     computed['train_batches'] = len(train_loader)
@@ -50,7 +50,8 @@ def train(cfg: DictConfig):
         else:
             state = torch.load(hydra.utils.to_absolute_path(cfg.model_weights), map_location='cpu')
             state = state.get('state_dict', state)
-        utils.restore_compatible_weights(model, state)
+        to_restore = getattr(model.model, 'encoder', model.model)
+        utils.restore_compatible_weights(to_restore, state)
 
     # INITIALIZE: logger
     if 'logger' in cfg:
