@@ -188,7 +188,7 @@ def restore_compatible_weights(model, state):
     such as classifier layers that have been adjusted for a new set of classes, are not restored,
     but left randomly initialized.
     '''
-    net = model.model
+    net = model
     net_state = net.state_dict()
     new_state = {}
     incompatible = []
