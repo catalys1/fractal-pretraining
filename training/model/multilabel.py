@@ -54,7 +54,10 @@ class MultiLabelModel(_BaseModule):
         x, y = batch
         logits = self.forward(x)
         y = torch.zeros(logits.shape, dtype=x.dtype, device=x.device).scatter_(1, y, 1)
-        w = torch.empty(logits.shape[1], dtype=x.dtype, device=x.device).fill_(logits.shape[1] / 5)
+        # w = torch.empty(logits.shape[1], dtype=x.dtype, device=x.device).fill_(logits.shape[1] / 5)
+        w = y.count_nonzero(dim=1)
+        w[w == 0] = 1
+        w = (logits.shape[1] / w)[:, None].expand(*logits.shape)
         loss = self.loss_fn(logits, y, pos_weight=w)
         with torch.no_grad():
             preds = logits.sigmoid()
