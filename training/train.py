@@ -70,7 +70,8 @@ def train(cfg: DictConfig):
             if '_target_' in cb_conf:
                 log.info(f'Instantiating callback <{cb_conf._target_}>')
                 callbacks.append(hydra.utils.instantiate(cb_conf))
-    callbacks.append(utils.SaveConfig(cfg))
+    if not getattr(cfg.trainer, 'fast_dev_run', False):
+        callbacks.append(utils.SaveConfig(cfg))
 
     if cfg.trainer.accelerator == 'ddp':
         plugins = pl.plugins.DDPPlugin(find_unused_parameters=False)
