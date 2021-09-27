@@ -32,7 +32,7 @@ def train(cfg: DictConfig):
 
     # INITIALIZE: data
     # datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
-    datamodule = hydra.utils.instantiate(cfg.data)
+    datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
     train_loader = datamodule.train_dataloader()
 
     computed['train_batches'] = len(train_loader)
@@ -51,7 +51,8 @@ def train(cfg: DictConfig):
         else:
             state = torch.load(hydra.utils.to_absolute_path(cfg.model_weights), map_location='cpu')
             state = state.get('state_dict', state)
-        utils.restore_compatible_weights(model, state)
+        to_restore = getattr(model.model, 'encoder', model.model)
+        utils.restore_compatible_weights(to_restore, state)
 
     # INITIALIZE: logger
     if 'logger' in cfg:
@@ -70,7 +71,8 @@ def train(cfg: DictConfig):
             if '_target_' in cb_conf:
                 log.info(f'Instantiating callback <{cb_conf._target_}>')
                 callbacks.append(hydra.utils.instantiate(cb_conf))
-    callbacks.append(utils.SaveConfig(cfg))
+    if not getattr(cfg.trainer, 'fast_dev_run', False):
+        callbacks.append(utils.SaveConfig(cfg))
 
     if cfg.trainer.accelerator == 'ddp':
         plugins = pl.plugins.DDPPlugin(find_unused_parameters=False)
