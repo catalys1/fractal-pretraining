@@ -45,8 +45,45 @@ def sample_svs(n, a, rng=None):
     
     return s
 
+def sample_svs_rej(n, a, rng=None):
+    '''Sample singular values uniformly from the joint distribution over the n-dimensional surface
+    defined by the constraints (see sample_svs). Uniform sampling is achieved by means of rejection
+    sampling.
 
-def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
+    Args:
+        n (int): number of pairs of singular values to sample.
+        a (float): constraint on the weighted sum of all singular values. Note that a must be in the
+            range (0, 3*n).
+        rng (Optional[numpy.random._generator.Generator]): random number generator. If None (default), it defaults
+            to np.random.default_rng().
+            
+    Returns:
+        Numpy array of shape (n, 2) containing the singular values.
+    '''
+    if rng is None:
+        rng = np.random.default_rng()
+    if a < 0: a = 0
+    elif a > 3 * n: a = 3 * n
+
+    w = np.ones(2 * n - 1)
+    w[1::2] = 2
+    s = np.zeros((n, 2))
+    for i in range(1000):
+        s.ravel()[:-1] = rng.random(2 * n - 1)
+        # restrict to below the y=x line
+        r = s[:, 1] > s[:, 0]
+        s[r, :] = s[r][:, ::-1]
+        # check if valid or reject
+        b = (a - w @ s.ravel()[:-1]) / 2
+        if b <= s[-1, 0] and b >= 0:
+            s[-1, 1] = b
+            break
+    else:
+        print('Rejection sampling failed')
+    return s
+
+
+def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None, sample_fn=None):
     '''Return n random affine transforms. If constrain=True, enforce the transforms
     to be strictly contractive (by forcing singular values to be less than 1).
     
@@ -63,6 +100,9 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
             to np.random.default_rng().
         beta (float or Tuple[float, float]): range for weighted sum of singular values when constrain==True. Let 
             q ~ U(beta[0], beta[1]), then we enforce $\sum_{i=0}^{n-1} (s^i_1 + 2*s^i_2) = q$.
+        sample_fn (callable): function used for sampling singular values. Should accept three arguments: n, for
+            the size of the system; a, for the sigma-factor; and rng, the random generator. When None (default),
+            uses sample_svs.
     
     Returns:
         Numpy array of shape (n, 2, 3), containing n sets of 2x3 affine transformation matrices.
@@ -78,6 +118,9 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
         
     if beta is None:
         beta = ((5 + n) / 2, (6 + n) / 2)
+
+    if sample_fn is None:
+        sample_fn = sample_svs
         
     if constrain:
         # sample a matrix with singular values < 1 (a contraction)
@@ -95,7 +138,7 @@ def sample_system(n=None, constrain=True, bval=1, rng=None, beta=None):
         u, v = uv[:n], uv[n:]
         # 2. sample the singular values
         a = rng.uniform(*beta)
-        s = sample_svs(n, a, rng)
+        s = sample_fn(n, a, rng)
         # 3. sample the translation parameters from Uniform(-bval, bval) and create the transformation matrix
         m = np.empty((n, 2, 3))
         m[:, :, :2] = u * s[:, None, :] @ v
@@ -495,7 +538,7 @@ def random_search(search_size, workers=1, cutoff=0.05, **kwargs):
     return proposed
 
 
-def random_systems(num_systems, n=(2,5), bval=None, beta=None):
+def random_systems(num_systems, n=(2,5), bval=None, beta=None, sample_fn=None):
     '''Sample random systems.
 
     Args:
@@ -510,7 +553,7 @@ def random_systems(num_systems, n=(2,5), bval=None, beta=None):
     import tqdm
     systems = []
     for i in tqdm.trange(num_systems):
-        s = sample_system(n, bval=bval, beta=beta)
+        s = sample_system(n, bval=bval, beta=beta, sample_fn=sample_fn)
         systems.append({'system': s})
     return systems
 
@@ -525,6 +568,7 @@ if __name__ == '__main__':
     parser.add_argument('--bval', type=float, default=1)
     parser.add_argument('--beta_min', type=float, default=None)
     parser.add_argument('--beta_max', type=float, default=None)
+    parser.add_argument('--sample_fn', type=str, default=None)
     args = parser.parse_args()
 
     beta = None
@@ -532,17 +576,23 @@ if __name__ == '__main__':
         if args.beta_max:
             beta = (args.beta_min, args.beta_max)
         beta = (args.beta_min, args.beta_min)
+    
+    sample_fn = args.sample_fn
+    if sample_fn is not None:
+        sample_fn = globals()[sample_fn]
 
     kwargs = dict(
         num_systems=args.num_systems,
         n=(args.min_n, args.max_n+1),
         bval=args.bval,
         beta=beta,
+        sample_fn=sample_fn,
     )
     sys = random_systems(**kwargs)
 
     if args.save_path:
         import pickle
+        kwargs['sample_fn'] = args.sample_fn
         pickle.dump({'params': sys, 'hparams': kwargs}, open(args.save_path, 'wb'))
         print(f'Saved to {args.save_path}')
 
