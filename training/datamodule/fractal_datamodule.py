@@ -193,8 +193,11 @@ class MultiLabelFractalDataModule(LightningDataModule):
         lens = (len(x) for x in labels)
         labs = torch.zeros(len(labels), max(lens), dtype=torch.int64)
         for i in range(len(labels)):
-            labs[i, :len(labels[i])] = labels[i]
-            labs[i, len(labels[i]):] = labels[i][-1]
+            if len(labels[i]):
+                labs[i, :len(labels[i])] = labels[i]
+                labs[i, len(labels[i]):] = labels[i][-1]
+            else:
+                labs[i, :] = -1
         return imgs, labs
 
 

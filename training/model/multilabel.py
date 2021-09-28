@@ -51,9 +51,12 @@ class MultiLabelModel(_BaseModule):
         }
 
     def step(self, batch: Any):
-        x, y = batch
+        x, yy = batch
         logits = self.forward(x)
-        y = torch.zeros(logits.shape, dtype=x.dtype, device=x.device).scatter_(1, y, 1)
+        mask = yy[:, 0].eq(-1)
+        yy[mask] = 0
+        y = torch.zeros(logits.shape, dtype=x.dtype, device=x.device).scatter_(1, yy, 1)
+        y[mask, 0] = 0
         # w = torch.empty(logits.shape[1], dtype=x.dtype, device=x.device).fill_(logits.shape[1] / 5)
         w = y.count_nonzero(dim=1)
         w[w == 0] = 1
