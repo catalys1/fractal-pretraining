@@ -246,6 +246,7 @@ class MultiGenerator(_GeneratorBase):
         blur_p: Optional[float] = 0.5,
         niter = 100000,
         patch = True,
+        nobj_p = None,
     ):
         self.size = size
         self.n_objects = n_objects
@@ -262,6 +263,12 @@ class MultiGenerator(_GeneratorBase):
         self.cache_size = cache_size
         self.cache = {'fg': [], 'bg': [], 'label': []}
         self.idx = 0
+
+        if nobj_p is None:
+            self.nobj_p = np.ones(n_objects[1] - n_objects[0] + 1)
+        else:
+            self.nobj_p = np.array(nobj_p, dtype=np.float64)
+        self.nobj_p /= self.nobj_p.sum()
 
         self._set_jitter()
 
@@ -302,7 +309,8 @@ class MultiGenerator(_GeneratorBase):
         img = self.cache['bg'][idx].copy()
         labels = []
 
-        n = rng.integers(*self.n_objects, endpoint=True)
+        # n = rng.integers(*self.n_objects, endpoint=True)
+        n = rng.choice(range(self.n_objects[0], self.n_objects[1]+1), p=self.nobj_p)
         n = min(n, len(self))
         for i in range(n):
             idx = rng.integers(0, len(self))
@@ -329,7 +337,7 @@ class MultiGenerator(_GeneratorBase):
             self.composite(fg, img[y:y+fg.shape[0], x:x+fg.shape[1]])
 
         # randomly apply gaussian blur
-        if self.blur_p and rng.random() > 0.5:
+        if self.blur_p and rng.random() > self.blur_p:
             img = self.random_blur(img)
 
         return img, labels
