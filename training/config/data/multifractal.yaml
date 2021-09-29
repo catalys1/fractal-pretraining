@@ -18,11 +18,11 @@ generator:
   size: ${data.size}
   cache_size: 512
   n_objects:
-    -1
-    -5
+    - 1
+    - 5
   size_range:
-    -0.15
-    -0.6
+    - 0.15
+    - 0.6
   jitter_params: False
   niter: 100000
   patch: True
