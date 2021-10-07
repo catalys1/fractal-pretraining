@@ -1,6 +1,6 @@
 _target_: model.base.ClassificationModel
 model:
-  _target_: torchvision.models.resnet18
+  _target_: torchvision.models.resnet50
   pretrained: False
   num_classes: ${data.num_class}  # defined in the datamodule config
 lr: 0.1

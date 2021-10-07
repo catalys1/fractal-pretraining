@@ -14,7 +14,7 @@ data:
   generator:
     _target_: datamodule.datasets.fractaldata.IFSGenerator
     size: ${data.size}
-    jitter_params: False
+    jitter_params: True
     flips: True
     scale:
       - 0.5
