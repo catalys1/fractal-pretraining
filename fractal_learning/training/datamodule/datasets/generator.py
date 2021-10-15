@@ -4,7 +4,7 @@ from typing import Callable, Optional, Tuple, Union
 from cv2 import GaussianBlur, resize, INTER_LINEAR
 import numpy as np
 
-from fractals import diamondsquare, ifs
+from fractal_learning.fractals import diamondsquare, ifs
 
 
 class _GeneratorBase(object):

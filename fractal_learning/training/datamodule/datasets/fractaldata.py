@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torchvision
 
-from fractals import diamondsquare, ifs
+from fractal_learning.fractals import diamondsquare, ifs
 from .generator import IFSGenerator, MultiGenerator, SelfSupervisedGenerator
 
 
