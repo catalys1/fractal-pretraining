@@ -1,4 +1,4 @@
-_target_: datamodule.dogs_datamodule.DogsDataModule
+_target_: datamodule.classify_datamodule.DogsDataModule
 
 _name: dogs
 

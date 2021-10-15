@@ -1,4 +1,4 @@
-_target_: datamodule.cub_datamodule.CubDataModule
+_target_: datamodule.classify_datamodule.CubDataModule
 
 _name: CUB
 

@@ -1,4 +1,4 @@
-_target_: datamodule.aircraft_datamodule.AircraftDataModule
+_target_: datamodule.classify_datamodule.AircraftDataModule
 
 _name: aircraft
 

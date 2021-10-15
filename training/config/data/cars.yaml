@@ -1,4 +1,4 @@
-_target_: datamodule.cars_datamodule.StanfordCarsDataModule
+_target_: datamodule.classify_datamodule.StanfordCarsDataModule
 
 _name: stanford_cars
 

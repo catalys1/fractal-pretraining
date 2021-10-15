@@ -1,4 +1,4 @@
-_target_: datamodule.cifar100_datamodule.Cifar100DataModule
+_target_: datamodule.classify_datamodule.Cifar100DataModule
 
 _name: cifar100
 
