@@ -21,7 +21,7 @@ This is the official PyTorch code for Improving Fractal Pre-training ([arXiv](ht
 }
 ```
 
-<span style="color: red">This README is incomplete (work in progress).</span>
+<div style="color: red">This README is incomplete (work in progress).</div>
 
 ### Setup
 
