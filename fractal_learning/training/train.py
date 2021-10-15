@@ -32,7 +32,7 @@ def train(cfg: DictConfig):
 
     # INITIALIZE: data
     # datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
-    datamodule = hydra.utils.instantiate(cfg.data))
+    datamodule = hydra.utils.instantiate(cfg.data)
     train_loader = datamodule.train_dataloader()
 
     computed['train_batches'] = len(train_loader)
