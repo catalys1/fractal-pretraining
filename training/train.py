@@ -32,7 +32,7 @@ def train(cfg: DictConfig):
 
     # INITIALIZE: data
     # datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
-    datamodule = hydra.utils.instantiate(cfg.data, **sub_instantiate(cfg.data))
+    datamodule = hydra.utils.instantiate(cfg.data))
     train_loader = datamodule.train_dataloader()
 
     computed['train_batches'] = len(train_loader)
@@ -41,8 +41,6 @@ def train(cfg: DictConfig):
 
     # INITIALIZE: model
     utils.resolve_computed(cfg.model, computed)
-    # sub = sub_instantiate(cfg.model)
-    # model = hydra.utils.instantiate(cfg.model, **sub)
     model = hydra.utils.instantiate(cfg.model)
 
     if 'model_weights' in cfg:  # possibly load pre-trained weights
