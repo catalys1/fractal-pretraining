@@ -1,4 +1,3 @@
-from .cub_datamodule import *
-from .cars_datamodule import *
-from .cifar100_datamodule import *
-from .tinyimagenet_datamodule import *
+from .classify_datamodule import *
+from .medseg_datamodule import *
+from .fractal_datamodule import *

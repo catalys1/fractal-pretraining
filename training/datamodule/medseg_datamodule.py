@@ -44,7 +44,6 @@ class GlaSDataModule(LightningDataModule):
         pass
 
     def train_dataloader(self):
-        # breakpoint()
         if self.data_train is None:
             self.data_train = medical.GlaSDataset(
                 root = f'{self.data_dir}',
