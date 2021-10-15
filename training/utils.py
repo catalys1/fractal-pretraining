@@ -206,3 +206,22 @@ def restore_compatible_weights(model, state):
     log.info(f'  Missing keys: {", ".join(missing)}')
     log.info(f'  Extra keys: {", ".join(extra)}')
     log.info(f'  Incompatible sizes: {", ".join(incompatible)}')
+
+
+class CrossEntropy(torch.nn.Module):
+    '''Cross entropy loss function accepting arbitrary distribution for target.
+    Useful for, e.g., label smoothing cross entropy. Predictions should be logits,
+    targets should be a valid probability distribution.
+    '''
+    def __init__(self, reduction='mean'):
+        super().__init__()
+        self.reduction = reduction
+
+    def forward(self, pred, label):
+        pred = pred.log_softmax()
+        loss = label.mul(pred).sum(1).neg()
+        if self.reduction == 'mean':
+            loss = loss.mean()
+        elif self.reduction == 'sum':
+            loss = loss.sum()
+        return loss
