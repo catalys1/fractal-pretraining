@@ -26,13 +26,13 @@ This is the official PyTorch code for Improving Fractal Pre-training ([arXiv](ht
 ### Setup
 
 The code uses [PyTorch-Lightning](https://www.pytorchlightning.ai/) for training and [Hydra](https://hydra.cc/) for configuration. Other required packages are listed in `install_requirements.sh`.
-```yaml
+```bash
 # clone project
 git clone https://github.com/catalys1/fractal-pretraining.git
 cd fractal-pretraining
 
-# [RECOMMENDED] setup a virtual environment
-python3 -m venv venv
+# [RECOMMENDED] set up a virtual environment
+python3 -m venv venv_name  # choose your prefered venv name
 source venv/bin/activate
 
 # install requirements
@@ -41,4 +41,14 @@ bash install_requirements.sh
 pip install -e fractal_learning
 ```
 
-<br>
+
+## Sample and Render Iterated Function Systems
+
+See the [fractals](fractal_learning/fractals) sub-package for details on sampling IFS codes and rendering fractal images.
+
+
+## Training
+
+See the [training](fractal_learning/traininig) sub-package for details on pre-training with fractal images, as well as finetuning on other datasets.
+
+
