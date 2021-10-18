@@ -49,6 +49,6 @@ See the [fractals](fractal_learning/fractals) sub-package for details on samplin
 
 ## Training
 
-See the [training](fractal_learning/traininig) sub-package for details on pre-training with fractal images, as well as finetuning on other datasets.
+See the [training](fractal_learning/training) sub-package for details on pre-training with fractal images, as well as finetuning on other datasets.
 
 
