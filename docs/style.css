@@ -1,0 +1,40 @@
+body {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 1000px;
+}
+
+.center {
+    text-align: center;
+}
+
+.light-text {
+    color: #555555
+}
+
+.bigger {
+    font-size: 120%;
+}
+
+div.section {
+    margin-bottom: 40px;
+}
+
+button {
+    font-size: 0.8em;
+    padding: 8px 20px 8px 20px;
+    border: none;
+    background-color: #5e8be6;
+    color: white;
+    border-radius: 5px;
+}
+
+button:hover {
+    background-color: #84a3e3;
+    cursor: pointer;
+}
+
+#abstract {
+    text-align: justify;
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Improving Fractal Pre-training</title>
+    <link rel='stylesheet' type='text/css' href='style.css'>
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <h1 class='center biggger'>Improving Fractal Pre-training</h1>
+    <div class='center light-text'>
+        Winter Conference on Applications of Computer Vision (WACV) 2022
+    </div>
+    <br>
+    <div class='center bigger'>
+        <b>Connor Anderson</b> &emsp; <b>Ryan Farrell</b> <br>
+        Brigham Young University
+        <br><br>
+        <div id='btn-links'>
+            <a href='https://arxiv.org/abs/2110.03091'><button>Paper</button></a>
+            <a href='https://github.com/catalys1/fractal-pretraining'><button>Code</button></a>
+        </div>
+    </div>
+
+
+    <!-- ABSTRACT -->
+    <div id='abstract' class='section'>
+        <h2>Abstract</h2>
+        <p>
+        The deep neural networks used in modern computer vision systems require enormous image datasets to 
+        train them.  These carefully-curated datasets typically have a million or more images, across a 
+        thousand or more distinct categories.  The process of creating and curating such a dataset is a 
+        monumental undertaking, demanding extensive effort and labelling expense and necessitating careful 
+        navigation of technical and social issues such as label accuracy, copyright ownership, and content bias.
+        </p>
+
+        <p>
+        <b>What if we had a way to harness the power of large image datasets but with few or none of the major 
+            issues and concerns currently faced?</b>
+        This paper extends the recent work of Kataoka et. al (ACCV 2020), 
+        proposing an improved pre-training dataset based on dynamically-generated fractal images. 
+        Challenging issues with large-scale image datasets become points of elegance for fractal pre-training: 
+        perfect label accuracy at zero cost; no need to store/transmit large image archives; no 
+        privacy/demographic bias/concerns of inappropriate content, as no humans are pictured; limitless 
+        supply and diversity of images; and the images are free/open-source.  Perhaps surprisingly, avoiding 
+        these difficulties imposes only a small penalty in performance.  Leveraging a newly-proposed 
+        pre-training task&#x2014;multi-instance prediction&#x2014;our experiments demonstrate that fine-tuning 
+        a network pre-trained using fractals attains 92.7-98.1% of the accuracy of an ImageNet pre-trained 
+        network. Our code is publicly available.
+        </p>
+    </div>
+
+
+    <!-- METHOD -->
+    <hr>
+    <div class='section'>
+        <h2>Method</h2>
+        <img src='source/overview.svg' width=100%>
+
+        <h3>Iterated Function Systems</h3>
+        <p>
+            We propose an SVD-based approach for sampling IFS codes that is efficient and always yeilds
+            systems that converge (by constraining the singular values). We also propose a heuristic for
+            sampling singular values so that the resulting fractal geometry exhibits desirable properties.
+        </p>
+        <img src='source/sigma-factor-images.svg' width=100%>
+
+        <h3>Image Rendering</h3>
+        <p>
+            We find that incorporating color and randomly generated backgrounds leads to better representation
+            learning.
+        </p>
+        <img src='source/fractal-rendering.svg' width=70%>
+
+        <h3>Multi-instance Prediction Task</h3>
+        <p>
+            We introduce the multi-instance prediction pre-training task, and show that it leads to better
+            performance on fine-tuning tasks. Multi-instance prediction uses images with multiple fractals,
+            and has to predict the presence or absence of each fractal class, similar to binary attribute
+            prediction.
+        </p>
+        <img src='source/multi-instance-images.svg' width=60%>
+
+        <h3>Just-in-time Training Data</h3>
+        <p>
+            Using a combination of efficient <a href='https://numba.pydata.org/'>Numba</a> code and a
+            rendering cache, we are able generate all training images on-the-fly during training, without
+            having to generate or store any images up front. The dataset is thus very efficient to store
+            and transmit.
+        </p>
+    </div>
+    
+
+    <!-- RESULTS -->
+    <hr>
+    <div class='section'>
+        <h2>Results</h2>
+
+        <h3>Fine-tuning</h3>
+        <p>
+            Our pre-training methods lead to networks that can achieve performance much better than
+            training from scratch, and approaching the performance of ImageNet pre-training.
+        </p>
+        <img src='source/finetune-results.svg' width=100%>
+
+        <h3>First-layer Filters</h3>
+        <p>
+            Multi-instance prediction learns first-layer filters that are very similar to those learned
+            from ImageNet pre-training.
+        </p>
+        <img src='source/first-layer-weights.svg' width=100%>
+    </div>
+
+
+    <!-- INTERACTIVE VIEWER-->
+    <hr>
+    <div class='section'>
+        <h2>Interactive IFS Viewer</h2>
+        <p>
+            We provide an interactive web interface for exploring and manipulating affine iterated function 
+            systems.
+        </p>
+        <a href='https://catalys1.github.io/ifs-fractal-web/'><button>IFS Explorer</button></a>
+    </div>
+
+
+    <!-- CITATION -->
+    <hr>
+    <div class='section'>
+        <h2>Citation</h2>
+        <code>
+        @misc{anderson2021improving, <br>
+        title         = {Improving Fractal Pre-training},  <br>
+        author        = {Connor Anderson and Ryan Farrell}, <br>
+        year          = {2021}, <br>
+        eprint        = {2110.03091}, <br>
+        archivePrefix = {arXiv}, <br>
+        primaryClass  = {cs.CV} <br>
+        }
+        </code>
+    </div>
+
+    <div style="margin-bottom: 200px"></div>
+
+</body>
+</html>
