@@ -12,6 +12,5 @@ pip install tqdm
 pip install python-dotenv
 
 # Choose the appropriate version of pytorch for your system
-# Here we're using a preview version with cuda 11
 pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu116
 pip install pytorch-lightning>=1.4.0 torchmetrics>=0.4.1 segmentation-models-pytorch
