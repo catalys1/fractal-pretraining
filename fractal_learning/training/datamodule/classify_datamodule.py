@@ -53,6 +53,8 @@ class _BaseDataModule(LightningDataModule):
         pass
 
     def train_dataloader(self):
+        if not self.data_train:
+            self.setup()
         return DataLoader(
             dataset = self.data_train,
             batch_size = self.batch_size,
@@ -63,6 +65,8 @@ class _BaseDataModule(LightningDataModule):
         )
 
     def val_dataloader(self):
+        if not self.data_val:
+            self.setup()
         return DataLoader(
             dataset = self.data_val,
             batch_size = self.batch_size,

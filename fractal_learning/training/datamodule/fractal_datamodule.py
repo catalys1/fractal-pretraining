@@ -48,6 +48,7 @@ class FractalClassDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
+        self.num_systems = num_systems
         self.num_class = num_class
         self.per_class = per_class
         self.generator = generator
@@ -69,6 +70,7 @@ class FractalClassDataModule(LightningDataModule):
             self.data_file = self.data_dir + self.data_file
         self.data_train = fractaldata.FractalClassDataset(
             param_file=self.data_file,
+            num_systems=self.num_systems,
             num_class=self.num_class,
             per_class=self.per_class,
             generator=self.generator,
